@@ -1,14 +1,14 @@
 --[[
-    LiquidUI - Clean Core Library v3.5.0 Enterprise Edition
-    - Fully fixed all unrounded frames, adding clean UICorner and UIStroke mappings across every container.
-    - Added Dropdown and Keybind components alongside upgraded Buttons, Toggles, Sliders, and Inputs.
-    - Captivating modern dark glass aesthetic with optimized touch and resize blocks.
+    LiquidUI - Clean Core Library v3.5.1 Enterprise Edition
+    - Fixed syntax error on CreateButton height evaluation
+    - Fixed all remaining unrounded frames with UICorner & UIStroke
+    - Clean dropdown animations and circular slider knobs
 ]]
 
 local LiquidUI = {}
 LiquidUI.__index = LiquidUI
 
-LiquidUI.Version = "3.5.0"
+LiquidUI.Version = "3.5.1"
 
 LiquidUI.Theme = {
     Background = Color3.fromRGB(4, 4, 6),
@@ -173,7 +173,7 @@ function LiquidUI:CreateWindow(options)
         return connection
     end
 
-    -- Floating Square Toggle Button on the Right Side
+    -- Floating Square Toggle Button
     local FloatingToggle = Create("TextButton", {
         Name = "FloatingToggle",
         AnchorPoint = Vector2.new(1, 0.5),
@@ -301,7 +301,7 @@ function LiquidUI:CreateWindow(options)
     Corner(window, 14)
     Stroke(window, theme.Border, 0.3, 1)
 
-    -- Invisible Resizing Input Blocker Overlay
+    -- Resizing Input Blocker Overlay
     local resizeBlocker = Create("TextButton", {
         Name = "ResizeInputBlocker",
         Size = UDim2.fromScale(1, 1),
@@ -615,7 +615,7 @@ function LiquidUI:CreateWindow(options)
 
         function api:CreateButton(config)
             config = config or {}
-            local card = MakeCard(page, config.Height || 46)
+            local card = MakeCard(page, config.Height or 46)
 
             local control = Create("TextButton", {
                 Size = UDim2.fromScale(1, 1),
