@@ -1,16 +1,16 @@
 --[[
-    LiquidUI - Clean Core Library v3.3.0
-    - Kept your exact underlying code structure, dragging safety, and full compatibility.
-    - Removed the ugly outline/shadow frame overlay completely.
-    - Rewrote notifications to be a sleek, clean, minimalist toast card on the bottom-right.
-    - Integrated Lucide icon image labels for tabs.
-    - Added a clean square toggle button on the right side of the screen to show/hide the GUI.
+    LiquidUI - Clean Modern Core Library v3.1.1
+    - Exact 3.1.0 core functionality & bug-free dragging preserved
+    - Removed ugly outline shadow frame overlay completely
+    - Sleek rewritten toast notifications
+    - Lucide icon integration for tabs
+    - Clean square toggle button on the right side of the screen
 ]]
 
 local LiquidUI = {}
 LiquidUI.__index = LiquidUI
 
-LiquidUI.Version = "3.3.0"
+LiquidUI.Version = "3.1.1"
 
 LiquidUI.Theme = {
     Background = Color3.fromRGB(3, 3, 4),
@@ -36,11 +36,13 @@ local LucideIcons = {
     ["more-horizontal"] = "rbxassetid://10723345152",
     ["user"] = "rbxassetid://10723343321",
     ["bell"] = "rbxassetid://10723343881",
-    ["shield"] = "rbxassetid://10723345388"
+    ["shield"] = "rbxassetid://10723345388",
+    ["folder"] = "rbxassetid://10723346959",
+    ["cpu"] = "rbxassetid://10723371539"
 }
 
 function LiquidUI:GetIcon(iconName)
-    if not iconName then return "" end
+    if not iconName then return "rbxassetid://10723345518" end
     if type(iconName) == "string" and iconName:sub(1, 12) == "rbxassetid://" then
         return iconName
     end
@@ -291,6 +293,14 @@ function LiquidUI:CreateWindow(options)
     })
 
     -- Opening layer
+    local opening = Create("ScreenGui", {
+        Name = "OpeningLayer_Container",
+        IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    }) -- handled via standard frame inside gui to avoid multi-ScreenGui layers if preferred, but let's keep it clean:
+    
+    opening:Destroy() -- fallback cleanup
+
     local opening = Create("Frame", {
         Name = "OpeningLayer",
         Size = UDim2.fromScale(1, 1),
@@ -321,8 +331,8 @@ function LiquidUI:CreateWindow(options)
         Parent = opening
     })
 
-    Corner(openingCard, 16)
-    Stroke(openingCard, theme.BorderLight, 0.2, 1)
+    Corner(openingCard, 20)
+    Stroke(openingCard, theme.BorderLight, 0.12, 1.3)
 
     local openingAccent = Create("Frame", {
         Position = UDim2.fromOffset(22, 20),
@@ -333,13 +343,13 @@ function LiquidUI:CreateWindow(options)
         Parent = openingCard
     })
 
-    Corner(openingAccent, 12)
-    Stroke(openingAccent, theme.AccentLight, 0.2, 1)
+    Corner(openingAccent, 15)
+    Stroke(openingAccent, theme.AccentLight, 0.18, 1)
 
     local openingLogo = Label(
         openingAccent,
         options.Logo or "L",
-        26,
+        28,
         theme.AccentLight,
         true
     )
@@ -351,13 +361,13 @@ function LiquidUI:CreateWindow(options)
     local openingTitle = Label(
         openingCard,
         options.Title or "LiquidUI",
-        20,
+        21,
         theme.Text,
         true
     )
 
     openingTitle.Position = UDim2.fromOffset(22, 88)
-    openingTitle.Size = UDim2.new(1, -44, 0, 30)
+    openingTitle.Size = UDim2.new(1, -44, 0, 31)
     openingTitle.ZIndex = 102
 
     local openingSubtitle = Label(
@@ -368,7 +378,7 @@ function LiquidUI:CreateWindow(options)
         false
     )
 
-    openingSubtitle.Position = UDim2.fromOffset(23, 118)
+    openingSubtitle.Position = UDim2.fromOffset(23, 119)
     openingSubtitle.Size = UDim2.new(1, -46, 0, 20)
     openingSubtitle.ZIndex = 102
 
@@ -381,7 +391,7 @@ function LiquidUI:CreateWindow(options)
         Parent = openingCard
     })
 
-    Corner(loadingTrack, 2)
+    Corner(loadingTrack, 5)
 
     local loadingFill = Create("Frame", {
         Size = UDim2.new(0, 0, 1, 0),
@@ -391,11 +401,11 @@ function LiquidUI:CreateWindow(options)
         Parent = loadingTrack
     })
 
-    Corner(loadingFill, 2)
+    Corner(loadingFill, 5)
 
     local openingStatus = Label(
         openingCard,
-        "LOADING SYSTEM",
+        "INITIALIZING INTERFACE",
         10,
         theme.SubText,
         false
@@ -405,14 +415,23 @@ function LiquidUI:CreateWindow(options)
     openingStatus.Size = UDim2.new(1, -46, 0, 20)
     openingStatus.ZIndex = 102
 
-    -- Clean Main Window Frame (NO ugly outline/shadow wrapper overlay)
+    Label(
+        openingCard,
+        "LIQUIDUI  /  V" .. self.Version,
+        9,
+        theme.SubText,
+        false
+    ).Position = UDim2.fromOffset(23, 222)
+
+    -- WindowOutline (Shadow Frame) completely removed as requested!
+
     local window = Create("Frame", {
         Name = "MainWindow",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromOffset(viewport.X / 2, viewport.Y / 2),
         Size = UDim2.fromOffset(width, height),
         BackgroundColor3 = theme.Background,
-        BackgroundTransparency = 0.02,
+        BackgroundTransparency = 0.025,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Visible = false,
@@ -420,14 +439,24 @@ function LiquidUI:CreateWindow(options)
         Parent = gui
     })
 
-    Corner(window, 12)
-    Stroke(window, theme.Border, 0.25, 1)
+    Corner(window, 16)
+    Stroke(window, theme.BorderLight, 0.08, 1.2)
+
+    Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 14, 17)),
+            ColorSequenceKeypoint.new(0.45, Color3.fromRGB(4, 4, 5)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 13))
+        }),
+        Rotation = 40,
+        Parent = window
+    })
 
     local topbar = Create("Frame", {
         Name = "Topbar",
-        Size = UDim2.new(1, 0, 0, 60),
-        BackgroundColor3 = Color3.fromRGB(6, 6, 8),
-        BackgroundTransparency = 0.1,
+        Size = UDim2.new(1, 0, 0, 65),
+        BackgroundColor3 = Color3.fromRGB(9, 9, 11),
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         Active = true,
         ZIndex = 3,
@@ -435,7 +464,7 @@ function LiquidUI:CreateWindow(options)
     })
 
     local logoBox = Create("Frame", {
-        Position = UDim2.fromOffset(14, 10),
+        Position = UDim2.fromOffset(14, 12),
         Size = UDim2.fromOffset(40, 40),
         BackgroundColor3 = theme.SurfaceLight,
         BorderSizePixel = 0,
@@ -443,38 +472,40 @@ function LiquidUI:CreateWindow(options)
         Parent = topbar
     })
 
-    Corner(logoBox, 8)
-    Stroke(logoBox, theme.Border, 0.3, 1)
+    Corner(logoBox, 11)
+    Stroke(logoBox, theme.BorderLight, 0.2, 1)
 
-    local logoText = Label(logoBox, options.Logo or "L", 18, theme.AccentLight, true)
+    local logoText = Label(logoBox, options.Logo or "L", 20, theme.AccentLight, true)
     logoText.TextXAlignment = Enum.TextXAlignment.Center
     logoText.Size = UDim2.fromScale(1, 1)
     logoText.ZIndex = 5
 
-    local titleLabel = Label(topbar, options.Title or "LiquidUI", 14, theme.Text, true)
-    titleLabel.Position = UDim2.fromOffset(64, 9)
-    titleLabel.Size = UDim2.new(1, -160, 0, 22)
+    local titleLabel = Label(topbar, options.Title or "LiquidUI", 15, theme.Text, true)
+    titleLabel.Position = UDim2.fromOffset(65, 10)
+    titleLabel.Size = UDim2.new(1, -170, 0, 23)
+    titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
     titleLabel.ZIndex = 4
 
     local subtitle = Label(
         topbar,
-        options.Subtitle or "Interface Suite",
+        options.Subtitle or options.Author or "Interface Suite",
         11,
         theme.SubText,
         false
     )
 
-    subtitle.Position = UDim2.fromOffset(64, 29)
-    subtitle.Size = UDim2.new(1, -160, 0, 18)
+    subtitle.Position = UDim2.fromOffset(66, 32)
+    subtitle.Size = UDim2.new(1, -170, 0, 18)
+    subtitle.TextTruncate = Enum.TextTruncate.AtEnd
     subtitle.ZIndex = 4
 
     local minimizeButton = Create("TextButton", {
-        Position = UDim2.new(1, -76, 0, 15),
+        Position = UDim2.new(1, -77, 0, 15),
         Size = UDim2.fromOffset(28, 30),
         BackgroundTransparency = 1,
         Text = "−",
         TextColor3 = theme.SubText,
-        TextSize = 20,
+        TextSize = 23,
         Font = Enum.Font.Gotham,
         AutoButtonColor = false,
         ZIndex = 5,
@@ -482,12 +513,12 @@ function LiquidUI:CreateWindow(options)
     })
 
     local closeButton = Create("TextButton", {
-        Position = UDim2.new(1, -42, 0, 15),
+        Position = UDim2.new(1, -43, 0, 15),
         Size = UDim2.fromOffset(28, 30),
         BackgroundTransparency = 1,
         Text = "×",
         TextColor3 = theme.Text,
-        TextSize = 22,
+        TextSize = 24,
         Font = Enum.Font.Gotham,
         AutoButtonColor = false,
         ZIndex = 5,
@@ -495,10 +526,10 @@ function LiquidUI:CreateWindow(options)
     })
 
     Create("Frame", {
-        Position = UDim2.new(0, 0, 0, 60),
+        Position = UDim2.new(0, 0, 0, 64),
         Size = UDim2.new(1, 0, 0, 1),
         BackgroundColor3 = theme.Border,
-        BackgroundTransparency = 0.5,
+        BackgroundTransparency = 0.4,
         BorderSizePixel = 0,
         ZIndex = 4,
         Parent = window
@@ -506,10 +537,10 @@ function LiquidUI:CreateWindow(options)
 
     local sidebar = Create("Frame", {
         Name = "Sidebar",
-        Position = UDim2.fromOffset(0, 61),
-        Size = UDim2.new(0, 160, 1, -61),
-        BackgroundColor3 = Color3.fromRGB(5, 5, 7),
-        BackgroundTransparency = 0.2,
+        Position = UDim2.fromOffset(0, 65),
+        Size = UDim2.new(0, 165, 1, -65),
+        BackgroundColor3 = Color3.fromRGB(7, 7, 9),
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         ZIndex = 3,
         Parent = window
@@ -517,16 +548,19 @@ function LiquidUI:CreateWindow(options)
 
     local tabList = Create("ScrollingFrame", {
         Name = "TabList",
-        Position = UDim2.fromOffset(8, 10),
-        Size = UDim2.new(1, -16, 1, -20),
+        Position = UDim2.fromOffset(9, 12),
+        Size = UDim2.new(1, -18, 1, -75),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 0,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = theme.BorderLight,
         CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ZIndex = 4,
         Parent = sidebar
     })
+
+    AddPadding(tabList, 0, 0, 0, 4)
 
     Create("UIListLayout", {
         Padding = UDim.new(0, 6),
@@ -534,10 +568,33 @@ function LiquidUI:CreateWindow(options)
         Parent = tabList
     })
 
+    local profile = Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, -10),
+        Size = UDim2.new(1, -18, 0, 47),
+        BackgroundColor3 = theme.Surface,
+        BorderSizePixel = 0,
+        ZIndex = 4,
+        Parent = sidebar
+    })
+
+    Corner(profile, 10)
+    Stroke(profile, theme.Border, 0.5, 1)
+
+    local profileTitle = Label(profile, options.Author or "Toolkit", 12, theme.Text, true)
+    profileTitle.Position = UDim2.fromOffset(11, 5)
+    profileTitle.Size = UDim2.new(1, -20, 0, 18)
+    profileTitle.ZIndex = 5
+
+    local profileSubtitle = Label(profile, "v" .. self.Version, 10, theme.SubText, false)
+    profileSubtitle.Position = UDim2.fromOffset(11, 23)
+    profileSubtitle.Size = UDim2.new(1, -20, 0, 15)
+    profileSubtitle.ZIndex = 5
+
     local content = Create("Frame", {
         Name = "Content",
-        Position = UDim2.new(0, 160, 0, 61),
-        Size = UDim2.new(1, -160, 1, -61),
+        Position = UDim2.new(0, 165, 0, 65),
+        Size = UDim2.new(1, -165, 1, -65),
         BackgroundTransparency = 1,
         ClipsDescendants = true,
         ZIndex = 3,
@@ -545,26 +602,26 @@ function LiquidUI:CreateWindow(options)
     })
 
     local header = Create("Frame", {
-        Position = UDim2.fromOffset(16, 12),
-        Size = UDim2.new(1, -32, 0, 40),
+        Position = UDim2.fromOffset(14, 9),
+        Size = UDim2.new(1, -28, 0, 43),
         BackgroundTransparency = 1,
         ZIndex = 4,
         Parent = content
     })
 
-    local pageTitle = Label(header, "Dashboard", 16, theme.Text, true)
-    pageTitle.Size = UDim2.new(1, 0, 0, 22)
+    local pageTitle = Label(header, "Welcome", 18, theme.Text, true)
+    pageTitle.Size = UDim2.new(1, 0, 0, 23)
     pageTitle.ZIndex = 5
 
-    local pageSubtitle = Label(header, "Active workspace system.", 11, theme.SubText, false)
-    pageSubtitle.Position = UDim2.fromOffset(0, 21)
-    pageSubtitle.Size = UDim2.new(1, 0, 0, 16)
+    local pageSubtitle = Label(header, "Choose a section to get started.", 11, theme.SubText, false)
+    pageSubtitle.Position = UDim2.fromOffset(0, 23)
+    pageSubtitle.Size = UDim2.new(1, 0, 0, 17)
     pageSubtitle.ZIndex = 5
 
     local pageHolder = Create("Frame", {
         Name = "Pages",
-        Position = UDim2.fromOffset(14, 56),
-        Size = UDim2.new(1, -28, 1, -66),
+        Position = UDim2.fromOffset(12, 55),
+        Size = UDim2.new(1, -24, 1, -67),
         BackgroundTransparency = 1,
         ClipsDescendants = true,
         ZIndex = 4,
@@ -575,10 +632,10 @@ function LiquidUI:CreateWindow(options)
         Name = "ResizeGrip",
         AnchorPoint = Vector2.new(1, 1),
         Position = UDim2.new(1, -2, 1, -2),
-        Size = UDim2.fromOffset(16, 16),
+        Size = UDim2.fromOffset(19, 19),
         BackgroundTransparency = 1,
         Text = "◢",
-        TextSize = 11,
+        TextSize = 13,
         TextColor3 = theme.SubText,
         AutoButtonColor = false,
         Active = true,
@@ -613,7 +670,7 @@ function LiquidUI:CreateWindow(options)
 
             item.Page.Visible = selected
             item.Button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Surface
-            item.Button.BackgroundTransparency = selected and 0.1 or 0.6
+            item.Button.BackgroundTransparency = selected and 0.05 or 0.4
             item.Indicator.BackgroundTransparency = selected and 0 or 1
             item.Label.TextColor3 = selected and theme.Text or theme.SubText
             item.Icon.ImageColor3 = selected and theme.AccentLight or theme.SubText
@@ -622,24 +679,28 @@ function LiquidUI:CreateWindow(options)
 
     local function MakeCard(parent, cardHeight)
         local card = Create("Frame", {
-            Size = UDim2.new(1, 0, 0, cardHeight or 46),
+            Size = UDim2.new(1, 0, 0, cardHeight or 48),
             BackgroundColor3 = theme.Surface,
-            BackgroundTransparency = 0.2,
+            BackgroundTransparency = 0.12,
             BorderSizePixel = 0,
             Parent = parent
         })
 
-        Corner(card, 8)
-        Stroke(card, theme.Border, 0.6, 1)
+        Corner(card, 10)
+        Stroke(card, theme.Border, 0.5, 1)
 
         return card
     end
 
     local function Handle(instance, methods)
-        local result = { Instance = instance }
+        local result = {
+            Instance = instance
+        }
+
         for key, value in pairs(methods or {}) do
             result[key] = value
         end
+
         return result
     end
 
@@ -653,31 +714,31 @@ function LiquidUI:CreateWindow(options)
         name = tostring(name or ("Tab " .. (#tabs + 1)))
 
         local tabButton = Create("TextButton", {
-            Size = UDim2.new(1, 0, 0, 36),
+            Size = UDim2.new(1, 0, 0, 39),
             BackgroundColor3 = theme.Surface,
-            BackgroundTransparency = 0.6,
+            BackgroundTransparency = 0.4,
             BorderSizePixel = 0,
             Text = "",
             AutoButtonColor = false,
             Parent = tabList
         })
 
-        Corner(tabButton, 8)
+        Corner(tabButton, 9)
 
         local indicator = Create("Frame", {
-            Position = UDim2.fromOffset(0, 6),
-            Size = UDim2.new(0, 2, 1, -12),
+            Position = UDim2.fromOffset(0, 7),
+            Size = UDim2.new(0, 3, 1, -14),
             BackgroundColor3 = theme.AccentLight,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             Parent = tabButton
         })
 
-        Corner(indicator, 2)
+        Corner(indicator, 3)
 
-        -- Lucide icon image mapping for tab
+        -- Lucide Icon ImageLabel for tab
         local icon = Create("ImageLabel", {
-            Position = UDim2.fromOffset(10, 10),
+            Position = UDim2.fromOffset(10, 11),
             Size = UDim2.fromOffset(16, 16),
             BackgroundTransparency = 1,
             Image = LiquidUI:GetIcon(iconName or "home"),
@@ -686,8 +747,8 @@ function LiquidUI:CreateWindow(options)
         })
 
         local tabLabel = Label(tabButton, name, 12, theme.SubText, true)
-        tabLabel.Position = UDim2.fromOffset(34, 0)
-        tabLabel.Size = UDim2.new(1, -38, 1, 0)
+        tabLabel.Position = UDim2.fromOffset(36, 0)
+        tabLabel.Size = UDim2.new(1, -40, 1, 0)
         tabLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
         local page = Create("ScrollingFrame", {
@@ -695,7 +756,7 @@ function LiquidUI:CreateWindow(options)
             Size = UDim2.fromScale(1, 1),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            ScrollBarThickness = 2,
+            ScrollBarThickness = 3,
             ScrollBarImageColor3 = theme.BorderLight,
             CanvasSize = UDim2.new(),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -703,7 +764,7 @@ function LiquidUI:CreateWindow(options)
             Parent = pageHolder
         })
 
-        AddPadding(page, 0, 4, 0, 6)
+        AddPadding(page, 1, 4, 1, 6)
 
         Create("UIListLayout", {
             Padding = UDim.new(0, 8),
@@ -713,7 +774,7 @@ function LiquidUI:CreateWindow(options)
 
         local tab = {
             Name = name,
-            Description = description or ("Controls for " .. name),
+            Description = description or ("Manage " .. name .. " components."),
             Button = tabButton,
             Indicator = indicator,
             Icon = icon,
@@ -731,21 +792,55 @@ function LiquidUI:CreateWindow(options)
 
         function api:AddSection(sectionName)
             local section = Create("Frame", {
-                Size = UDim2.new(1, 0, 0, 22),
+                Size = UDim2.new(1, 0, 0, 25),
                 BackgroundTransparency = 1,
                 Parent = page
             })
 
-            local text = Label(section, sectionName, 12, theme.AccentLight, true)
-            text.Position = UDim2.fromOffset(2, 0)
-            text.Size = UDim2.new(1, -4, 1, 0)
+            local text = Label(section, sectionName, 13, theme.AccentLight, true)
+            text.Position = UDim2.fromOffset(4, 0)
+            text.Size = UDim2.new(1, -8, 1, 0)
 
             return section
         end
 
+        function api:CreateLabel(config)
+            if type(config) ~= "table" then
+                config = {Name = tostring(config)}
+            end
+
+            local label = Label(
+                page,
+                config.Name or config.Text or "Label",
+                config.TextSize or 13,
+                config.Color or theme.SubText,
+                config.Bold
+            )
+
+            label.Size = UDim2.new(1, -5, 0, config.Height or 25)
+            label.TextWrapped = true
+
+            return Handle(label, {
+                SetText = function(_, value)
+                    label.Text = tostring(value)
+                end
+            })
+        end
+
+        function api:CreateDivider()
+            return Create("Frame", {
+                Size = UDim2.new(1, -4, 0, 1),
+                BackgroundColor3 = theme.Border,
+                BackgroundTransparency = 0.55,
+                BorderSizePixel = 0,
+                Parent = page
+            })
+        end
+
         function api:CreateButton(config)
             config = config or {}
-            local card = MakeCard(page, config.Height or 44)
+
+            local card = MakeCard(page, config.Height or 48)
 
             local control = Create("TextButton", {
                 Size = UDim2.fromScale(1, 1),
@@ -755,16 +850,26 @@ function LiquidUI:CreateWindow(options)
                 Parent = card
             })
 
-            local text = Label(card, config.Name or "Button", 12, theme.Text, true)
-            text.Position = UDim2.fromOffset(12, 0)
-            text.Size = UDim2.new(1, -40, 1, 0)
+            local text = Label(card, config.Name or "Button", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(13, 0)
+            text.Size = UDim2.new(1, -50, 1, 0)
+            text.TextTruncate = Enum.TextTruncate.AtEnd
+
+            local arrow = Label(card, "›", 23, theme.AccentLight, false)
+            arrow.TextXAlignment = Enum.TextXAlignment.Center
+            arrow.Position = UDim2.new(1, -32, 0, 0)
+            arrow.Size = UDim2.fromOffset(23, config.Height or 48)
 
             Connect(control.MouseEnter, function()
-                PlayTween(card, 0.12, { BackgroundColor3 = theme.SurfaceHover })
+                PlayTween(card, 0.13, {
+                    BackgroundColor3 = theme.SurfaceHover
+                })
             end)
 
             Connect(control.MouseLeave, function()
-                PlayTween(card, 0.12, { BackgroundColor3 = theme.Surface })
+                PlayTween(card, 0.13, {
+                    BackgroundColor3 = theme.Surface
+                })
             end)
 
             Connect(control.Activated, function()
@@ -772,93 +877,124 @@ function LiquidUI:CreateWindow(options)
             end)
 
             return Handle(card, {
-                SetText = function(_, v) text.Text = tostring(v) end
+                Button = control,
+                SetText = function(_, value)
+                    text.Text = tostring(value)
+                end
             })
         end
 
         function api:CreateToggle(config)
             config = config or {}
-            local value = config.Default == true
-            local card = MakeCard(page, config.Height or 52)
 
-            local text = Label(card, config.Name or "Toggle", 12, theme.Text, true)
-            text.Position = UDim2.fromOffset(12, 6)
-            text.Size = UDim2.new(1, -75, 0, 18)
+            local value = config.Default == true
+            local card = MakeCard(page, config.Height or 57)
+
+            local text = Label(card, config.Name or "Toggle", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(13, 5)
+            text.Size = UDim2.new(1, -85, 0, 21)
 
             if config.Description then
                 local desc = Label(card, config.Description, 10, theme.SubText, false)
-                desc.Position = UDim2.fromOffset(12, 24)
-                desc.Size = UDim2.new(1, -75, 0, 16)
+                desc.Position = UDim2.fromOffset(13, 27)
+                desc.Size = UDim2.new(1, -85, 0, 17)
+                desc.TextTruncate = Enum.TextTruncate.AtEnd
             end
 
             local switch = Create("TextButton", {
                 AnchorPoint = Vector2.new(1, 0.5),
                 Position = UDim2.new(1, -12, 0.5, 0),
-                Size = UDim2.fromOffset(36, 20),
-                BackgroundColor3 = value and theme.Accent or Color3.fromRGB(40, 40, 48),
+                Size = UDim2.fromOffset(39, 22),
+                BackgroundColor3 = value and theme.Accent or Color3.fromRGB(49, 49, 55),
                 BorderSizePixel = 0,
                 Text = "",
                 AutoButtonColor = false,
                 Parent = card
             })
 
-            Corner(switch, 10)
+            Corner(switch, 20)
 
             local knob = Create("Frame", {
-                Position = value and UDim2.new(1, -17, 0, 2) or UDim2.fromOffset(2, 2),
+                Position = value and UDim2.new(1, -19, 0, 3) or UDim2.fromOffset(3, 3),
                 Size = UDim2.fromOffset(16, 16),
-                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BackgroundColor3 = Color3.fromRGB(245, 247, 250),
                 BorderSizePixel = 0,
                 Parent = switch
             })
 
-            Corner(knob, 8)
+            Corner(knob, 20)
 
-            local function SetValue(nv, fire)
-                value = nv == true
-                PlayTween(switch, 0.12, { BackgroundColor3 = value and theme.Accent or Color3.fromRGB(40, 40, 48) })
-                PlayTween(knob, 0.12, { Position = value and UDim2.new(1, -17, 0, 2) or UDim2.fromOffset(2, 2) })
-                if fire ~= false then Callback(config.Callback, value) end
+            local function SetValue(newValue, fire)
+                value = newValue == true
+
+                PlayTween(switch, 0.13, {
+                    BackgroundColor3 = value and theme.Accent or Color3.fromRGB(49, 49, 55)
+                })
+
+                PlayTween(knob, 0.13, {
+                    Position = value and UDim2.new(1, -19, 0, 3) or UDim2.fromOffset(3, 3)
+                })
+
+                if fire ~= false then
+                    Callback(config.Callback, value)
+                end
             end
 
-            Connect(switch.Activated, function() SetValue(not value, true) end)
+            Connect(switch.Activated, function()
+                SetValue(not value, true)
+            end)
 
             return Handle(card, {
                 SetValue = SetValue,
-                GetValue = function() return value end
+                GetValue = function()
+                    return value
+                end,
+                SetText = function(_, newText)
+                    text.Text = tostring(newText)
+                end
             })
         end
 
         function api:CreateSlider(config)
             config = config or {}
-            local minVal = tonumber(config.Min) or 0
-            local maxVal = tonumber(config.Max) or 100
-            local value = Clamp(tonumber(config.Default) or minVal, minVal, maxVal)
-            local card = MakeCard(page, 64)
 
-            local text = Label(card, config.Name or "Slider", 12, theme.Text, true)
-            text.Position = UDim2.fromOffset(12, 6)
-            text.Size = UDim2.new(1, -70, 0, 18)
+            local minimumValue = tonumber(config.Min) or 0
+            local maximumValue = tonumber(config.Max) or 100
 
-            local valLabel = Label(card, tostring(value), 11, theme.AccentLight, true)
-            valLabel.TextXAlignment = Enum.TextXAlignment.Right
-            valLabel.Position = UDim2.new(1, -60, 0, 6)
-            valLabel.Size = UDim2.fromOffset(48, 18)
+            if maximumValue < minimumValue then
+                minimumValue, maximumValue = maximumValue, minimumValue
+            end
+
+            local value = Clamp(tonumber(config.Default) or minimumValue, minimumValue, maximumValue)
+            local decimals = Clamp(tonumber(config.Decimals) or 0, 0, 4)
+            local card = MakeCard(page, 70)
+
+            local text = Label(card, config.Name or "Slider", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(13, 5)
+            text.Size = UDim2.new(1, -80, 0, 20)
+
+            local valueLabel = Label(card, value, 11, theme.AccentLight, true)
+            valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+            valueLabel.Position = UDim2.new(1, -65, 0, 5)
+            valueLabel.Size = UDim2.fromOffset(52, 20)
 
             local bar = Create("Frame", {
-                Position = UDim2.new(0, 12, 0, 38),
-                Size = UDim2.new(1, -24, 0, 5),
-                BackgroundColor3 = Color3.fromRGB(35, 35, 42),
+                Position = UDim2.new(0, 13, 0, 43),
+                Size = UDim2.new(1, -26, 0, 6),
+                BackgroundColor3 = Color3.fromRGB(43, 45, 52),
                 BorderSizePixel = 0,
                 Active = true,
                 Parent = card
             })
 
-            Corner(bar, 3)
+            Corner(bar, 8)
 
-            local function Ratio(v)
-                if maxVal == minVal then return 0 end
-                return Clamp((v - minVal) / (maxVal - minVal), 0, 1)
+            local function Ratio(number)
+                if maximumValue == minimumValue then
+                    return 0
+                end
+
+                return Clamp((number - minimumValue) / (maximumValue - minimumValue), 0, 1)
             end
 
             local fill = Create("Frame", {
@@ -868,86 +1004,470 @@ function LiquidUI:CreateWindow(options)
                 Parent = bar
             })
 
-            Corner(fill, 3)
+            Corner(fill, 8)
 
-            local function SetValue(nv, fire)
-                value = Clamp(tonumber(nv) or minVal, minVal, maxVal)
+            local knob = Create("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.new(Ratio(value), 0, 0.5, 0),
+                Size = UDim2.fromOffset(14, 14),
+                BackgroundColor3 = Color3.fromRGB(242, 247, 255),
+                BorderSizePixel = 0,
+                Parent = bar
+            })
+
+            Corner(knob, 12)
+            Stroke(knob, theme.AccentLight, 0.1, 1)
+
+            local function SetValue(newValue, fire)
+                local multiplier = 10 ^ decimals
+
+                value = Clamp(tonumber(newValue) or minimumValue, minimumValue, maximumValue)
+                value = math.floor(value * multiplier + 0.5) / multiplier
+
                 local ratio = Ratio(value)
+
                 fill.Size = UDim2.new(ratio, 0, 1, 0)
-                valLabel.Text = tostring(value)
-                if fire ~= false then Callback(config.Callback, value) end
+                knob.Position = UDim2.new(ratio, 0, 0.5, 0)
+                valueLabel.Text = tostring(value)
+
+                if fire ~= false then
+                    Callback(config.Callback, value)
+                end
             end
 
             local dragging = false
+            local activeTouch
+
+            local function Update(input)
+                local ratio = Clamp(
+                    (input.Position.X - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1),
+                    0,
+                    1
+                )
+
+                SetValue(minimumValue + (maximumValue - minimumValue) * ratio)
+            end
+
             Connect(bar.InputBegan, function(input)
-                if IsPointer(input) then dragging = true end
+                if not IsPointer(input) then
+                    return
+                end
+
+                dragging = true
+                activeTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
+                Update(input)
             end)
+
             Connect(UserInputService.InputChanged, function(input)
-                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local ratio = Clamp((input.Position.X - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
-                    SetValue(minVal + (maxVal - minVal) * ratio)
+                if not dragging then
+                    return
+                end
+
+                if input.UserInputType == Enum.UserInputType.MouseMovement and not activeTouch then
+                    Update(input)
+                elseif input.UserInputType == Enum.UserInputType.Touch and input == activeTouch then
+                    Update(input)
                 end
             end)
+
             Connect(UserInputService.InputEnded, function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input == activeTouch then
                     dragging = false
+                    activeTouch = nil
                 end
             end)
 
             return Handle(card, {
                 SetValue = SetValue,
-                GetValue = function() return value end
+                GetValue = function()
+                    return value
+                end,
+                SetText = function(_, newText)
+                    text.Text = tostring(newText)
+                end
             })
         end
 
         function api:CreateInput(config)
             config = config or {}
-            local card = MakeCard(page, 62)
 
-            local text = Label(card, config.Name or "Input", 12, theme.Text, true)
+            local card = MakeCard(page, 67)
+
+            local text = Label(card, config.Name or "Input", 13, theme.Text, true)
             text.Position = UDim2.fromOffset(12, 4)
-            text.Size = UDim2.new(1, -24, 0, 18)
+            text.Size = UDim2.new(1, -24, 0, 20)
 
             local box = Create("TextBox", {
-                Position = UDim2.fromOffset(10, 26),
-                Size = UDim2.new(1, -20, 0, 26),
+                Position = UDim2.fromOffset(10, 29),
+                Size = UDim2.new(1, -20, 0, 28),
                 BackgroundColor3 = theme.Background,
                 BorderSizePixel = 0,
                 Text = tostring(config.Default or ""),
-                PlaceholderText = config.Placeholder or "Enter value...",
+                PlaceholderText = config.Placeholder or "Enter a value...",
                 PlaceholderColor3 = theme.SubText,
                 TextColor3 = theme.Text,
-                TextSize = 11,
+                TextSize = 12,
                 Font = Enum.Font.Gotham,
                 TextXAlignment = Enum.TextXAlignment.Left,
+                ClearTextOnFocus = false,
                 Parent = card
             })
 
-            Corner(box, 6)
-            Stroke(box, theme.Border, 0.7, 1)
+            Corner(box, 7)
+            Stroke(box, theme.Border, 0.55, 1)
             AddPadding(box, 8, 8, 0, 0)
 
-            Connect(box.FocusLost, function(enter)
-                Callback(config.Callback, box.Text, enter)
+            Connect(box.FocusLost, function(enterPressed)
+                Callback(config.Callback, box.Text, enterPressed)
             end)
 
             return Handle(card, {
-                GetValue = function() return box.Text end,
-                SetValue = function(_, v) box.Text = tostring(v or "") end
+                TextBox = box,
+                GetValue = function()
+                    return box.Text
+                end,
+                SetValue = function(_, newValue)
+                    box.Text = tostring(newValue or "")
+                end,
+                SetText = function(_, newText)
+                    text.Text = tostring(newText)
+                end
+            })
+        end
+
+        function api:CreateDropdown(config)
+            config = config or {}
+
+            local values = config.Options or {}
+            local selected = config.Default or "Select an option"
+            local opened = false
+            local optionConnections = {}
+
+            local card = MakeCard(page, 59)
+            card.ClipsDescendants = false
+            card.ZIndex = 6
+
+            local text = Label(card, config.Name or "Dropdown", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(12, 3)
+            text.Size = UDim2.new(1, -24, 0, 20)
+
+            local dropdownButton = Create("TextButton", {
+                Position = UDim2.fromOffset(9, 27),
+                Size = UDim2.new(1, -18, 0, 25),
+                BackgroundColor3 = theme.Background,
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                ZIndex = 7,
+                Parent = card
+            })
+
+            Corner(dropdownButton, 7)
+            Stroke(dropdownButton, theme.Border, 0.6, 1)
+
+            local selectedText = Label(dropdownButton, selected, 11, theme.SubText, false)
+            selectedText.Position = UDim2.fromOffset(8, 0)
+            selectedText.Size = UDim2.new(1, -30, 1, 0)
+            selectedText.TextTruncate = Enum.TextTruncate.AtEnd
+            selectedText.ZIndex = 8
+
+            local arrow = Label(dropdownButton, "⌄", 15, theme.AccentLight, true)
+            arrow.Position = UDim2.new(1, -26, 0, 0)
+            arrow.Size = UDim2.fromOffset(20, 25)
+            arrow.TextXAlignment = Enum.TextXAlignment.Center
+            arrow.ZIndex = 8
+
+            local popup = Create("Frame", {
+                Position = UDim2.new(0, 0, 1, 4),
+                Size = UDim2.new(1, 0, 0, 0),
+                BackgroundColor3 = theme.Surface,
+                BorderSizePixel = 0,
+                Visible = false,
+                ClipsDescendants = true,
+                ZIndex = 30,
+                Parent = card
+            })
+
+            Corner(popup, 8)
+            Stroke(popup, theme.BorderLight, 0.2, 1)
+
+            local list = Create("ScrollingFrame", {
+                Size = UDim2.fromScale(1, 1),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ScrollBarThickness = 2,
+                ScrollBarImageColor3 = theme.Accent,
+                CanvasSize = UDim2.new(),
+                AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                ZIndex = 31,
+                Parent = popup
+            })
+
+            AddPadding(list, 4, 4, 4, 4)
+
+            Create("UIListLayout", {
+                Padding = UDim.new(0, 3),
+                Parent = list
+            })
+
+            local function ClearOptions()
+                for _, connection in ipairs(optionConnections) do
+                    connection:Disconnect()
+                end
+
+                table.clear(optionConnections)
+
+                for _, child in ipairs(list:GetChildren()) do
+                    if child:IsA("TextButton") then
+                        child:Destroy()
+                    end
+                end
+            end
+
+            local function SetOpen(state)
+                opened = state
+
+                if opened then
+                    popup.Visible = true
+
+                    PlayTween(popup, 0.14, {
+                        Size = UDim2.new(1, 0, 0, math.min(#values * 29 + 8, 145))
+                    })
+                else
+                    PlayTween(popup, 0.12, {
+                        Size = UDim2.new(1, 0, 0, 0)
+                    })
+
+                    task.delay(0.13, function()
+                        if popup.Parent and not opened then
+                            popup.Visible = false
+                        end
+                    end)
+                end
+            end
+
+            local function Refresh()
+                ClearOptions()
+
+                for _, option in ipairs(values) do
+                    local value = option
+
+                    local optionButton = Create("TextButton", {
+                        Size = UDim2.new(1, 0, 0, 27),
+                        BackgroundColor3 = theme.SurfaceLight,
+                        BackgroundTransparency = 0.25,
+                        BorderSizePixel = 0,
+                        Text = tostring(value),
+                        TextColor3 = theme.Text,
+                        TextSize = 11,
+                        Font = Enum.Font.Gotham,
+                        AutoButtonColor = false,
+                        ZIndex = 32,
+                        Parent = list
+                    })
+
+                    Corner(optionButton, 6)
+
+                    table.insert(optionConnections, optionButton.Activated:Connect(function()
+                        selected = value
+                        selectedText.Text = tostring(value)
+                        SetOpen(false)
+                        Callback(config.Callback, value)
+                    end))
+                end
+            end
+
+            Refresh()
+
+            Connect(dropdownButton.Activated, function()
+                SetOpen(not opened)
+            end)
+
+            Connect(card.Destroying, ClearOptions)
+
+            return Handle(card, {
+                GetValue = function()
+                    return selected
+                end,
+                SetValue = function(_, value, fire)
+                    selected = value
+                    selectedText.Text = tostring(value)
+
+                    if fire ~= false then
+                        Callback(config.Callback, value)
+                    end
+                end,
+                Refresh = function(_, newOptions)
+                    values = newOptions or {}
+                    Refresh()
+                end,
+                SetText = function(_, newText)
+                    text.Text = tostring(newText)
+                end
+            })
+        end
+
+        function api:CreateParagraph(config)
+            config = config or {}
+
+            local card = MakeCard(page, config.Height or 78)
+
+            local text = Label(card, config.Title or config.Name or "Information", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(12, 7)
+            text.Size = UDim2.new(1, -24, 0, 20)
+
+            local body = Label(card, config.Content or "", 11, theme.SubText, false)
+            body.Position = UDim2.fromOffset(12, 30)
+            body.Size = UDim2.new(1, -24, 1, -36)
+            body.TextWrapped = true
+            body.TextYAlignment = Enum.TextYAlignment.Top
+
+            return Handle(card, {
+                SetTitle = function(_, value)
+                    text.Text = tostring(value)
+                end,
+                SetContent = function(_, value)
+                    body.Text = tostring(value)
+                end
+            })
+        end
+
+        function api:CreateKeybind(config)
+            config = config or {}
+
+            local key = config.Default or Enum.KeyCode.RightShift
+            local listening = false
+            local card = MakeCard(page, 48)
+
+            local text = Label(card, config.Name or "Keybind", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(12, 0)
+            text.Size = UDim2.new(1, -115, 1, 0)
+
+            local keyButton = Button(card, key.Name, 28)
+            keyButton.AnchorPoint = Vector2.new(1, 0.5)
+            keyButton.Position = UDim2.new(1, -10, 0.5, 0)
+            keyButton.Size = UDim2.fromOffset(90, 28)
+
+            Connect(keyButton.Activated, function()
+                listening = true
+                keyButton.Text = "Press key"
+            end)
+
+            Connect(UserInputService.InputBegan, function(input, processed)
+                if processed or destroyed then
+                    return
+                end
+
+                if listening then
+                    if input.KeyCode == Enum.KeyCode.Unknown then
+                        return
+                    end
+
+                    key = input.KeyCode
+                    keyButton.Text = key.Name
+                    listening = false
+                    Callback(config.Changed, key)
+                elseif input.KeyCode == key then
+                    Callback(config.Callback, key)
+                end
+            end)
+
+            return Handle(card, {
+                SetValue = function(_, newKey)
+                    if typeof(newKey) == "EnumItem" then
+                        key = newKey
+                        keyButton.Text = key.Name
+                    end
+                end,
+                GetValue = function()
+                    return key
+                end,
+                SetText = function(_, value)
+                    text.Text = tostring(value)
+                end
             })
         end
 
         SelectTab(#tabs == 1 and tab or currentTab)
+
         return api
     end
 
     windowObject.Tab = windowObject.CreateTab
 
-    -- Rewritten Minimalist Notification System (Sleek Toast Card on Bottom-Right)
+    function windowObject:SetTitle(value)
+        titleLabel.Text = tostring(value)
+    end
+
+    function windowObject:SetSubtitle(value)
+        subtitle.Text = tostring(value)
+    end
+
+    function windowObject:SetSize(newSize)
+        if destroyed or typeof(newSize) ~= "UDim2" then
+            return
+        end
+
+        local view = Viewport()
+
+        local newWidth = Clamp(
+            newSize.X.Offset,
+            math.min(minimum.X, view.X),
+            math.min(maximum.X, view.X)
+        )
+
+        local newHeight = Clamp(
+            newSize.Y.Offset,
+            math.min(minimum.Y, view.Y),
+            math.min(maximum.Y, view.Y)
+        )
+
+        savedSize = Vector2.new(newWidth, newHeight)
+
+        PlayTween(window, 0.17, {
+            Size = UDim2.fromOffset(newWidth, newHeight)
+        })
+    end
+
+    function windowObject:SetVisible(visible)
+        windowVisible = visible == true
+
+        if not destroyed then
+            window.Visible = windowVisible
+        end
+    end
+
+    function windowObject:Toggle()
+        windowVisible = not windowVisible
+
+        if not destroyed then
+            window.Visible = windowVisible
+        end
+    end
+
+    function windowObject:SelectTab(name)
+        for _, tab in ipairs(tabs) do
+            if tab.Name == name then
+                SelectTab(tab)
+                return true
+            end
+        end
+
+        return false
+    end
+
+    -- Rewritten Clean Minimalist Notification System
     function windowObject:Notify(config)
-        if destroyed then return end
+        if destroyed then
+            return
+        end
+
         if type(config) ~= "table" then
-            config = { Title = "Notification", Content = tostring(config) }
+            config = {
+                Title = "Notification",
+                Content = tostring(config)
+            }
         end
 
         local toast = Create("Frame", {
@@ -964,129 +1484,386 @@ function LiquidUI:CreateWindow(options)
         Corner(toast, 10)
         Stroke(toast, theme.BorderLight, 0.3, 1)
 
-        local title = Label(toast, config.Title or "Notice", 12, theme.Text, true)
-        title.Position = UDim2.fromOffset(12, 8)
-        title.Size = UDim2.new(1, -20, 0, 16)
-        title.ZIndex = 901
+        local toastTitle = Label(toast, config.Title or "Notification", 12, theme.Text, true)
+        toastTitle.Position = UDim2.fromOffset(12, 8)
+        toastTitle.Size = UDim2.new(1, -20, 0, 16)
+        toastTitle.ZIndex = 901
 
-        local body = Label(toast, config.Content or "", 10, theme.SubText, false)
-        body.Position = UDim2.fromOffset(12, 26)
-        body.Size = UDim2.new(1, -20, 0, 22)
-        body.ZIndex = 901
+        local toastBody = Label(toast, config.Content or config.Message or "", 10, theme.SubText, false)
+        toastBody.Position = UDim2.fromOffset(12, 26)
+        toastBody.Size = UDim2.new(1, -20, 0, 22)
+        toastBody.ZIndex = 901
 
         table.insert(toasts, toast)
 
-        PlayTween(toast, 0.2, { Position = UDim2.new(1, -16, 1, -20) })
+        PlayTween(toast, 0.2, {
+            Position = UDim2.new(1, -16, 1, -20)
+        })
 
-        task.delay(math.max(tonumber(config.Duration) or 3, 1), function()
-            if not toast.Parent then return end
-            PlayTween(toast, 0.18, { Position = UDim2.new(1, 300, 1, -20), BackgroundTransparency = 1 })
+        task.delay(math.max(tonumber(config.Duration) or 3, 0.1), function()
+            if not toast.Parent then
+                return
+            end
+
+            PlayTween(toast, 0.18, {
+                Position = UDim2.new(1, 300, 1, -20),
+                BackgroundTransparency = 1
+            })
+
             task.delay(0.2, function()
-                if toast.Parent then toast:Destroy() end
+                if toast.Parent then
+                    toast:Destroy()
+                end
             end)
         end)
+
+        return toast
     end
 
     function windowObject:Minimize()
-        minimized = not minimized
-        window.Visible = not minimized
-    end
+        if destroyed then
+            return
+        end
 
-    function windowObject:Toggle()
-        windowVisible = not windowVisible
-        window.Visible = windowVisible
+        minimized = not minimized
+
+        if minimized then
+            sidebar.Visible = false
+            content.Visible = false
+            resizeGrip.Visible = false
+
+            PlayTween(window, 0.16, {
+                Size = UDim2.fromOffset(window.AbsoluteSize.X, 65)
+            })
+        else
+            sidebar.Visible = true
+            content.Visible = true
+            resizeGrip.Visible = true
+
+            PlayTween(window, 0.16, {
+                Size = UDim2.fromOffset(savedSize.X, savedSize.Y)
+            })
+        end
     end
 
     function windowObject:Destroy()
+        if destroyed then
+            return
+        end
+
         destroyed = true
-        for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+
+        for _, connection in ipairs(connections) do
+            pcall(function()
+                connection:Disconnect()
+            end)
+        end
+
+        table.clear(connections)
+        table.clear(tabs)
+        table.clear(toasts)
+
         gui:Destroy()
+
+        if LiquidUI.Window == self then
+            LiquidUI.Window = nil
+        end
     end
 
-    -- Floating Square Toggle Action to Show/Hide GUI
+    -- Floating Toggle Action to show/hide GUI
     Connect(FloatingToggle.Activated, function()
         windowVisible = not windowVisible
         window.Visible = windowVisible
     end)
 
-    Connect(minimizeButton.Activated, function() windowObject:Minimize() end)
-    Connect(closeButton.Activated, function() windowObject:Destroy() end)
+    Connect(minimizeButton.Activated, function()
+        windowObject:Minimize()
+    end)
 
-    -- Fixed Dragging Logic (Safe & Isolated)
-    local dragging, dragStart, dragOrigin = false, Vector2.zero, Vector2.zero
+    Connect(closeButton.Activated, function()
+        windowObject:Destroy()
+    end)
+
+    Connect(minimizeButton.MouseEnter, function()
+        minimizeButton.TextColor3 = theme.AccentLight
+    end)
+
+    Connect(minimizeButton.MouseLeave, function()
+        minimizeButton.TextColor3 = theme.SubText
+    end)
+
+    Connect(closeButton.MouseEnter, function()
+        closeButton.Danger = true
+        closeButton.TextColor3 = theme.Danger
+    end)
+
+    Connect(closeButton.MouseLeave, function()
+        closeButton.TextColor3 = theme.Text
+    end)
+
+    -- FIXED DRAGGING LOGIC (Completely isolates drag inputs and prevents mobile camera/joystick move glitches)
+    local dragging = false
+    local activeDragInput = nil
+    local dragStart = Vector2.zero
+    local dragOrigin = Vector2.zero
+
     Connect(topbar.InputBegan, function(input)
-        if destroyed or not IsPointer(input) then return end
+        if destroyed or not IsPointer(input) then
+            return
+        end
+
+        local mousePosition = input.Position
+        local closePosition = closeButton.AbsolutePosition
+        local minimizePosition = minimizeButton.AbsolutePosition
+
+        local function Within(position, size)
+            return mousePosition.X >= position.X
+                and mousePosition.X <= position.X + size.X
+                and mousePosition.Y >= position.Y
+                and mousePosition.Y <= position.Y + size.Y
+        end
+
+        if Within(closePosition, closeButton.AbsoluteSize)
+            or Within(minimizePosition, minimizeButton.AbsoluteSize) then
+            return
+        end
+
         dragging = true
+        activeDragInput = input
         dragStart = Vector2.new(input.Position.X, input.Position.Y)
         dragOrigin = Vector2.new(window.Position.X.Offset, window.Position.Y.Offset)
+        
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         end
     end)
 
     Connect(UserInputService.InputChanged, function(input)
-        if not dragging or destroyed then return end
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            local curr = Vector2.new(input.Position.X, input.Position.Y)
-            local delta = curr - dragStart
-            window.Position = ClampPosition(UDim2.fromOffset(dragOrigin.X + delta.X, dragOrigin.Y + delta.Y))
+        if not dragging or destroyed then
+            return
+        end
+
+        if (input == activeDragInput) or (activeDragInput == nil and input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local currentPos = Vector2.new(input.Position.X, input.Position.Y)
+            local delta = currentPos - dragStart
+            local target = UDim2.fromOffset(
+                dragOrigin.X + delta.X,
+                dragOrigin.Y + delta.Y
+            )
+
+            window.Position = ClampPosition(target)
         end
     end)
 
     Connect(UserInputService.InputEnded, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if dragging and (input == activeDragInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
             dragging = false
+            activeDragInput = nil
         end
     end)
 
-    -- Fixed Resizing Logic
+    -- FIXED RESIZING LOGIC
     local resizing = false
-    local resizeStart, resizeOrigin = Vector2.zero, Vector2.zero
+    local activeResizeInput = nil
+    local resizeStart = Vector2.zero
+    local resizeOrigin = Vector2.zero
+
     Connect(resizeGrip.InputBegan, function(input)
-        if destroyed or minimized or not IsPointer(input) then return end
+        if destroyed or minimized or not IsPointer(input) then
+            return
+        end
+
         resizing = true
+        activeResizeInput = input
         resizeStart = Vector2.new(input.Position.X, input.Position.Y)
         resizeOrigin = window.AbsoluteSize
     end)
 
     Connect(UserInputService.InputChanged, function(input)
-        if not resizing or destroyed then return end
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            local curr = Vector2.new(input.Position.X, input.Position.Y)
-            local delta = curr - resizeStart
+        if not resizing or destroyed then
+            return
+        end
+
+        if (input == activeResizeInput) or (activeResizeInput == nil and input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local currentPos = Vector2.new(input.Position.X, input.Position.Y)
+            local delta = currentPos - resizeStart
             local view = Viewport()
-            local newWidth = Clamp(resizeOrigin.X + delta.X, math.min(minimum.X, view.X), math.max(minimum.X, math.min(maximum.X, view.X)))
-            local newHeight = Clamp(resizeOrigin.Y + delta.Y, math.min(minimum.Y, view.Y), math.max(minimum.Y, math.min(maximum.Y, view.Y)))
+
+            local minWidth = math.min(minimum.X, view.X)
+            local minHeight = math.min(minimum.Y, view.Y)
+            local maxWidth = math.max(minWidth, math.min(maximum.X, view.X))
+            local maxHeight = math.max(minHeight, math.min(maximum.Y, view.Y))
+
+            local newWidth = Clamp(resizeOrigin.X + delta.X, minWidth, maxWidth)
+            local newHeight = Clamp(resizeOrigin.Y + delta.Y, minHeight, maxHeight)
+
             savedSize = Vector2.new(newWidth, newHeight)
+
             window.Size = UDim2.fromOffset(newWidth, newHeight)
         end
     end)
 
     Connect(UserInputService.InputEnded, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if resizing and (input == activeResizeInput or input.UserInputType == Enum.UserInputType.MouseButton1) then
             resizing = false
+            activeResizeInput = nil
         end
     end)
 
-    -- Opening Animation Sequence
-    task.spawn(function()
-        PlayTween(loadingFill, 0.4, { Size = UDim2.new(1, 0, 1, 0) })
-        task.wait(0.45)
-        PlayTween(openingCard, 0.2, { BackgroundTransparency = 1 })
-        PlayTween(opening, 0.2, { BackgroundTransparency = 1 })
-        task.wait(0.22)
-        opening:Destroy()
-        window.Visible = true
+    Connect(UserInputService.InputBegan, function(input, processed)
+        if destroyed or processed then
+            return
+        end
 
-        windowObject:Notify({
-            Title = options.Title or "LiquidUI",
-            Content = "System initialized successfully.",
-            Duration = 2.5
-        })
+        if input.KeyCode == toggleKey then
+            windowVisible = not windowVisible
+            window.Visible = windowVisible
+        end
     end)
 
+    local viewportConnection
+
+    local function UpdateViewport()
+        if destroyed then
+            return
+        end
+
+        local view = Viewport()
+
+        local newWidth = Clamp(
+            window.AbsoluteSize.X,
+            math.min(minimum.X, view.X),
+            math.min(maximum.X, view.X)
+        )
+
+        local newHeight = Clamp(
+            window.AbsoluteSize.Y,
+            math.min(minimum.Y, view.Y),
+            math.min(maximum.Y, view.Y)
+        )
+
+        savedSize = Vector2.new(newWidth, newHeight)
+        window.Size = UDim2.fromOffset(newWidth, newHeight)
+        window.Position = ClampPosition(window.Position)
+    end
+
+    local function WatchCamera()
+        if viewportConnection then
+            viewportConnection:Disconnect()
+            viewportConnection = nil
+        end
+
+        local camera = workspace.CurrentCamera
+
+        if camera then
+            viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(UpdateViewport)
+        end
+    end
+
+    Connect(workspace:GetPropertyChangedSignal("CurrentCamera"), WatchCamera)
+    WatchCamera()
+
+    Connect(gui.Destroying, function()
+        dragging = false
+        resizing = false
+        if viewportConnection then
+            viewportConnection:Disconnect()
+        end
+    end)
+
+    local function OpenMain()
+        if destroyed then
+            return
+        end
+
+        openingStatus.Text = "READY"
+
+        PlayTween(loadingFill, 0.25, {
+            Size = UDim2.fromScale(1, 1)
+        })
+
+        task.delay(0.3, function()
+            if destroyed or not opening.Parent then
+                return
+            end
+
+            PlayTween(openingCard, 0.2, {
+                Position = UDim2.fromScale(0.5, 0.47),
+                BackgroundTransparency = 1
+            })
+
+            PlayTween(opening, 0.24, {
+                BackgroundTransparency = 1
+            })
+
+            for _, object in ipairs(openingCard:GetDescendants()) do
+                if object:IsA("TextLabel") then
+                    PlayTween(object, 0.15, {
+                        TextTransparency = 1
+                    })
+                elseif object:IsA("UIStroke") then
+                    PlayTween(object, 0.15, {
+                        Transparency = 1
+                    })
+                elseif object:IsA("Frame") then
+                    PlayTween(object, 0.15, {
+                        BackgroundTransparency = 1
+                    })
+                end
+            end
+
+            task.delay(0.26, function()
+                if destroyed then
+                    return
+                end
+
+                opening:Destroy()
+                window.Visible = true
+
+                windowObject:Notify({
+                    Title = options.Title or "LiquidUI",
+                    Content = "Interface suite loaded successfully.",
+                    Duration = 2.5
+                })
+            end)
+        end)
+    end
+
     self.Window = windowObject
+
+    task.spawn(function()
+        PlayTween(loadingFill, 0.65, {
+            Size = UDim2.new(0.72, 0, 1, 0)
+        })
+
+        task.wait(0.68)
+
+        if destroyed then
+            return
+        end
+
+        openingStatus.Text = "PREPARING WORKSPACE"
+
+        PlayTween(loadingFill, 0.4, {
+            Size = UDim2.new(1, 0, 1, 0)
+        })
+
+        task.wait(0.42)
+        OpenMain()
+    end)
+
+    if options.Visible == false then
+        windowVisible = false
+        window.Visible = false
+    end
+
     return windowObject
+end
+
+function LiquidUI:Notify(config)
+    if self.Window then
+        return self.Window:Notify(config)
+    end
 end
 
 return LiquidUI
