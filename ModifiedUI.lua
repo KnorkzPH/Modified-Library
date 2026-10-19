@@ -1,8 +1,7 @@
-
 local LiquidUI = {}
 LiquidUI.__index = LiquidUI
 
-LiquidUI.Version = "1.0.0"
+LiquidUI.Version = "1.1.0"
 LiquidUI.Theme = {
     Background = Color3.fromRGB(15, 17, 24),
     Surface = Color3.fromRGB(24, 27, 37),
@@ -45,16 +44,6 @@ local function stroke(parent, color, transparency, thickness)
     })
 end
 
-local function animate(object, properties, duration)
-    local tween = TweenService:Create(
-        object,
-        TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-        properties
-    )
-    tween:Play()
-    return tween
-end
-
 function LiquidUI:SetTheme(theme)
     for key, value in pairs(theme or {}) do
         if self.Theme[key] ~= nil then
@@ -65,29 +54,90 @@ end
 
 function LiquidUI:CreateWindow(options)
     options = options or {}
-
     local player = Players.LocalPlayer
     assert(player, "LiquidUI must run on the client")
 
+    local playerGui = player:WaitForChild("PlayerGui")
+    local guiName = options.Name or "LiquidUI"
+    local previous = playerGui:FindFirstChild(guiName)
+    if previous then
+        previous:Destroy()
+    end
+
+    local connections, tweens, notifications = {}, {}, {}
+    local window = {
+        Tabs = {},
+        ActiveTab = nil,
+        Destroyed = false,
+        Connections = connections,
+        Tweens = tweens
+    }
+
+    local function connect(signal, callback)
+        local connection = signal:Connect(callback)
+        table.insert(connections, connection)
+        return connection
+    end
+
+    local function animate(object, properties, duration)
+        if window.Destroyed or not object or not object.Parent then
+            return nil
+        end
+        for i = #tweens, 1, -1 do
+            local entry = tweens[i]
+            if entry.Object == object then
+                pcall(function() entry.Tween:Cancel() end)
+                table.remove(tweens, i)
+            end
+        end
+        local tween = TweenService:Create(
+            object,
+            TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+            properties
+        )
+        local entry = {Object = object, Tween = tween}
+        table.insert(tweens, entry)
+        local completedConnection
+        completedConnection = tween.Completed:Connect(function()
+            if completedConnection then
+                completedConnection:Disconnect()
+                for i = #connections, 1, -1 do
+                    if connections[i] == completedConnection then
+                        table.remove(connections, i)
+                        break
+                    end
+                end
+            end
+            for i = #tweens, 1, -1 do
+                if tweens[i] == entry then
+                    table.remove(tweens, i)
+                    break
+                end
+            end
+        end)
+        table.insert(connections, completedConnection)
+        tween:Play()
+        return tween
+    end
+
     local gui = create("ScreenGui", {
-        Name = options.Name or "LiquidUI",
+        Name = guiName,
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     })
+    window.Gui = gui
 
     local main = create("Frame", {
         Name = "Window",
         Size = options.Size or UDim2.fromOffset(680, 460),
-        Position = UDim2.new(0.5, -340, 0.5, -230),
+        Position = options.Position or UDim2.new(0.5, -340, 0.5, -230),
         BackgroundColor3 = self.Theme.Background,
         BackgroundTransparency = self.Theme.Transparency,
         BorderSizePixel = 0,
         ClipsDescendants = true
-    }, {
-        corner(nil, 14)
     })
-
     main.Parent = gui
+    window.Main = main
     corner(main, 14)
     stroke(main, self.Theme.Border, 0.82, 1)
 
@@ -96,7 +146,8 @@ function LiquidUI:CreateWindow(options)
         Size = UDim2.new(1, 0, 0, 54),
         BackgroundColor3 = self.Theme.Surface,
         BackgroundTransparency = 0.15,
-        BorderSizePixel = 0
+        BorderSizePixel = 0,
+        Active = true
     })
     topbar.Parent = main
 
@@ -137,11 +188,10 @@ function LiquidUI:CreateWindow(options)
     })
     sidebar.Parent = main
 
-    local tabList = create("UIListLayout", {
+    create("UIListLayout", {
         Padding = UDim.new(0, 7),
         SortOrder = Enum.SortOrder.LayoutOrder
-    })
-    tabList.Parent = sidebar
+    }).Parent = sidebar
 
     create("UIPadding", {
         PaddingTop = UDim.new(0, 12),
@@ -157,19 +207,35 @@ function LiquidUI:CreateWindow(options)
     })
     content.Parent = main
 
-    local window = {
-        Gui = gui,
-        Main = main,
-        Tabs = {},
-        ActiveTab = nil,
-        Destroyed = false
-    }
+    local overlay = create("Frame", {
+        Name = "Overlay",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        ZIndex = 100,
+        ClipsDescendants = false
+    })
+    overlay.Parent = gui
+
+    local dragging, dragStart, startPosition, activeSlider
+    local keybinds = {}
+    local openDropdown
+
+    local function closeDropdown()
+        if openDropdown then
+            if openDropdown.Popup then
+                openDropdown.Popup:Destroy()
+            end
+            openDropdown.IsOpen = false
+            openDropdown = nil
+        end
+    end
 
     function window:CreateTab(tabOptions)
+        if self.Destroyed then return nil end
         tabOptions = tabOptions or {}
-
         local tabName = tabOptions.Name or "Tab"
-        local button = create("TextButton", {
+
+        local tabButton = create("TextButton", {
             Name = tabName .. "Button",
             Size = UDim2.new(1, 0, 0, 38),
             BackgroundColor3 = LiquidUI.Theme.Accent,
@@ -180,8 +246,8 @@ function LiquidUI:CreateWindow(options)
             Font = Enum.Font.GothamMedium,
             AutoButtonColor = false
         })
-        button.Parent = sidebar
-        corner(button, 9)
+        tabButton.Parent = sidebar
+        corner(tabButton, 9)
 
         local page = create("ScrollingFrame", {
             Name = tabName .. "Page",
@@ -206,12 +272,10 @@ function LiquidUI:CreateWindow(options)
             PaddingBottom = UDim.new(0, 12)
         }).Parent = page
 
-        local tab = {
-            Button = button,
-            Page = page
-        }
+        local tab = {Button = tabButton, Page = page}
 
         function tab:AddSection(name)
+            if window.Destroyed then return nil end
             local section = create("TextLabel", {
                 Size = UDim2.new(1, -4, 0, 28),
                 BackgroundTransparency = 1,
@@ -226,8 +290,10 @@ function LiquidUI:CreateWindow(options)
         end
 
         function tab:CreateButton(config)
+            if window.Destroyed then return nil end
             config = config or {}
-            local buttonFrame = create("TextButton", {
+            local button = create("TextButton", {
+                Name = config.Name or "Button",
                 Size = UDim2.new(1, -4, 0, 42),
                 BackgroundColor3 = LiquidUI.Theme.Surface,
                 Text = config.Name or "Button",
@@ -236,28 +302,28 @@ function LiquidUI:CreateWindow(options)
                 Font = Enum.Font.GothamMedium,
                 AutoButtonColor = false
             })
-            buttonFrame.Parent = page
-            corner(buttonFrame, 10)
-            stroke(buttonFrame, LiquidUI.Theme.Border, 0.9)
+            button.Parent = page
+            corner(button, 10)
+            stroke(button, LiquidUI.Theme.Border, 0.9)
 
-            buttonFrame.MouseEnter:Connect(function()
-                animate(buttonFrame, {BackgroundColor3 = LiquidUI.Theme.SurfaceLight})
+            connect(button.MouseEnter, function()
+                animate(button, {BackgroundColor3 = LiquidUI.Theme.SurfaceLight})
             end)
-            buttonFrame.MouseLeave:Connect(function()
-                animate(buttonFrame, {BackgroundColor3 = LiquidUI.Theme.Surface})
+            connect(button.MouseLeave, function()
+                animate(button, {BackgroundColor3 = LiquidUI.Theme.Surface})
             end)
-            buttonFrame.Activated:Connect(function()
-                if config.Callback then
+            connect(button.Activated, function()
+                if not window.Destroyed and config.Callback then
                     task.spawn(config.Callback)
                 end
             end)
-            return buttonFrame
+            return button
         end
 
         function tab:CreateToggle(config)
+            if window.Destroyed then return nil end
             config = config or {}
             local value = config.Default == true
-
             local row = create("TextButton", {
                 Size = UDim2.new(1, -4, 0, 44),
                 BackgroundColor3 = LiquidUI.Theme.Surface,
@@ -295,8 +361,8 @@ function LiquidUI:CreateWindow(options)
             corner(knob, 20)
 
             local toggle = {}
-
             function toggle:Set(nextValue)
+                if window.Destroyed then return end
                 value = nextValue == true
                 animate(track, {
                     BackgroundColor3 = value and LiquidUI.Theme.Accent or LiquidUI.Theme.SurfaceLight
@@ -304,31 +370,25 @@ function LiquidUI:CreateWindow(options)
                 animate(knob, {
                     Position = value and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
                 })
-                if config.Callback then
-                    task.spawn(config.Callback, value)
-                end
+                if config.Callback then task.spawn(config.Callback, value) end
             end
+            function toggle:Get() return value end
 
-            function toggle:Get()
-                return value
-            end
-
-            row.Activated:Connect(function()
+            connect(row.Activated, function()
                 toggle:Set(not value)
             end)
-
-            if config.Callback then
-                task.spawn(config.Callback, value)
-            end
-
+            if config.Callback then task.spawn(config.Callback, value) end
             return toggle
         end
 
         function tab:CreateSlider(config)
+            if window.Destroyed then return nil end
             config = config or {}
-            local minimum = config.Min or 0
-            local maximum = config.Max or 100
-            local value = math.clamp(config.Default or minimum, minimum, maximum)
+            local minimum = tonumber(config.Min) or 0
+            local maximum = tonumber(config.Max) or 100
+            if maximum < minimum then minimum, maximum = maximum, minimum end
+            local value = math.clamp(tonumber(config.Default) or minimum, minimum, maximum)
+            local step = math.max(tonumber(config.Step) or 1, 0.000001)
 
             local row = create("Frame", {
                 Size = UDim2.new(1, -4, 0, 66),
@@ -359,71 +419,52 @@ function LiquidUI:CreateWindow(options)
             corner(bar, 6)
 
             local fill = create("Frame", {
-                Size = UDim2.new((value - minimum) / math.max(maximum - minimum, 1), 0, 1, 0),
+                Size = UDim2.new(maximum == minimum and 0 or (value - minimum) / (maximum - minimum), 0, 1, 0),
                 BackgroundColor3 = LiquidUI.Theme.Accent
             })
             fill.Parent = bar
             corner(fill, 6)
 
-            local dragging = false
+            local function render()
+                local ratio = maximum == minimum and 0 or (value - minimum) / (maximum - minimum)
+                fill.Size = UDim2.new(ratio, 0, 1, 0)
+                label.Text = (config.Name or "Slider") .. ": " .. tostring(value)
+            end
+
+            local function updateFromX(x)
+                if window.Destroyed or not bar.Parent then return end
+                local width = bar.AbsoluteSize.X
+                if width <= 0 then return end
+                local ratio = math.clamp((x - bar.AbsolutePosition.X) / width, 0, 1)
+                local raw = minimum + (maximum - minimum) * ratio
+                value = math.clamp(minimum + math.floor(((raw - minimum) / step) + 0.5) * step, minimum, maximum)
+                value = math.floor(value * 100000 + 0.5) / 100000
+                render()
+                if config.Callback then task.spawn(config.Callback, value) end
+            end
+
             local slider = {}
-
-            local function update(input)
-                local scale = math.clamp(
-                    (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X,
-                    0, 1
-                )
-                value = minimum + (maximum - minimum) * scale
-                value = math.floor(value + 0.5)
-                fill.Size = UDim2.new((value - minimum) / math.max(maximum - minimum, 1), 0, 1, 0)
-                label.Text = (config.Name or "Slider") .. ": " .. tostring(value)
-                if config.Callback then
-                    task.spawn(config.Callback, value)
-                end
-            end
-
             function slider:Set(nextValue)
-                value = math.clamp(nextValue, minimum, maximum)
-                fill.Size = UDim2.new((value - minimum) / math.max(maximum - minimum, 1), 0, 1, 0)
-                label.Text = (config.Name or "Slider") .. ": " .. tostring(value)
-                if config.Callback then
-                    task.spawn(config.Callback, value)
-                end
+                if window.Destroyed then return end
+                value = math.clamp(tonumber(nextValue) or minimum, minimum, maximum)
+                value = math.floor((minimum + math.floor(((value - minimum) / step) + 0.5) * step) * 100000 + 0.5) / 100000
+                render()
+                if config.Callback then task.spawn(config.Callback, value) end
             end
+            function slider:Get() return value end
 
-            function slider:Get()
-                return value
-            end
-
-            label.Text = (config.Name or "Slider") .. ": " .. tostring(value)
-
-            bar.Activated:Connect(function()
-                update({Position = UserInputService:GetMouseLocation()})
-            end)
-            bar.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1
-                    or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = true
-                    update(input)
+            render()
+            connect(bar.InputBegan, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    activeSlider = {Bar = bar, Update = updateFromX, Input = input}
+                    updateFromX(input.Position.X)
                 end
             end)
-            UserInputService.InputChanged:Connect(function(input)
-                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-                    or input.UserInputType == Enum.UserInputType.Touch) then
-                    update(input)
-                end
-            end)
-            UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1
-                    or input.UserInputType == Enum.UserInputType.Touch then
-                    dragging = false
-                end
-            end)
-
             return slider
         end
 
         function tab:CreateInput(config)
+            if window.Destroyed then return nil end
             config = config or {}
             local input = create("TextBox", {
                 Size = UDim2.new(1, -4, 0, 42),
@@ -443,16 +484,16 @@ function LiquidUI:CreateWindow(options)
                 PaddingRight = UDim.new(0, 12)
             }).Parent = input
 
-            input.FocusLost:Connect(function(enterPressed)
-                if config.Callback then
+            connect(input.FocusLost, function(enterPressed)
+                if not window.Destroyed and config.Callback then
                     task.spawn(config.Callback, input.Text, enterPressed)
                 end
             end)
-
             return input
         end
 
         function tab:CreateDropdown(config)
+            if window.Destroyed then return nil end
             config = config or {}
             local values = config.Options or {}
             local selected = config.Default or values[1] or "Select option"
@@ -464,144 +505,194 @@ function LiquidUI:CreateWindow(options)
                 TextColor3 = LiquidUI.Theme.Text,
                 TextSize = 13,
                 Font = Enum.Font.GothamMedium,
-                AutoButtonColor = false
+                AutoButtonColor = false,
+                ClipsDescendants = false
             })
             button.Parent = page
             corner(button, 10)
 
-            local dropdown = {}
-            local open = false
+            local dropdown = {IsOpen = false, Popup = nil, PopupConnections = {}}
+            local function popupConnect(signal, callback)
+                local connection = signal:Connect(callback)
+                table.insert(dropdown.PopupConnections, connection)
+                return connection
+            end
+            local function clearPopupConnections()
+                for _, connection in ipairs(dropdown.PopupConnections) do
+                    if connection.Connected then
+                        pcall(function() connection:Disconnect() end)
+                    end
+                end
+                table.clear(dropdown.PopupConnections)
+            end
+            local function updateText()
+                button.Text = (config.Name or "Dropdown") .. ": " .. tostring(selected) .. "  ▾"
+            end
+
+            local function positionPopup()
+                if not dropdown.Popup or not button.Parent then return end
+                local pos, size = button.AbsolutePosition, button.AbsoluteSize
+                local popupHeight = dropdown.Popup.AbsoluteSize.Y
+                local screenHeight = gui.AbsoluteSize.Y
+                local y = pos.Y + size.Y + 5
+                if y + popupHeight > screenHeight and pos.Y - popupHeight - 5 > 0 then
+                    y = pos.Y - popupHeight - 5
+                end
+                dropdown.Popup.Position = UDim2.fromOffset(pos.X, y)
+                dropdown.Popup.Size = UDim2.fromOffset(size.X, popupHeight)
+            end
 
             function dropdown:SetOptions(newOptions)
                 values = newOptions or {}
+                if dropdown.IsOpen then
+                    dropdown:Open()
+                end
             end
-
             function dropdown:Set(value)
                 selected = value
-                button.Text = (config.Name or "Dropdown") .. ": " .. tostring(selected) .. "  ▾"
-                if config.Callback then
-                    task.spawn(config.Callback, selected)
-                end
+                updateText()
+                if config.Callback then task.spawn(config.Callback, selected) end
             end
-
-            function dropdown:Get()
-                return selected
+            function dropdown:Get() return selected end
+            function dropdown:Close()
+                clearPopupConnections()
+                if self.Popup then self.Popup:Destroy() end
+                self.Popup = nil
+                self.IsOpen = false
+                if openDropdown == self then openDropdown = nil end
             end
+            function dropdown:Open()
+                if window.Destroyed then return end
+                closeDropdown()
+                self:Close()
+                self.IsOpen = true
+                openDropdown = self
 
-            button.Activated:Connect(function()
-                open = not open
-                for _, item in ipairs(button:GetChildren()) do
-                    if item.Name == "OptionList" then
-                        item:Destroy()
-                    end
-                end
-                if not open then return end
-
-                local list = create("Frame", {
-                    Name = "OptionList",
-                    Size = UDim2.new(1, 0, 0, math.min(#values * 34, 170)),
-                    Position = UDim2.new(0, 0, 1, 5),
+                local popup = create("ScrollingFrame", {
+                    Name = "DropdownOptions",
                     BackgroundColor3 = LiquidUI.Theme.SurfaceLight,
-                    ZIndex = 10
+                    BorderSizePixel = 0,
+                    ScrollBarThickness = 3,
+                    CanvasSize = UDim2.new(0, 0, 0, #values * 34),
+                    AutomaticCanvasSize = Enum.AutomaticSize.None,
+                    ZIndex = 110
                 })
-                list.Parent = button
-                corner(list, 8)
+                popup.Parent = overlay
+                self.Popup = popup
+                corner(popup, 8)
+                stroke(popup, LiquidUI.Theme.Border, 0.82, 1)
 
                 create("UIListLayout", {
                     SortOrder = Enum.SortOrder.LayoutOrder
-                }).Parent = list
+                }).Parent = popup
 
                 for _, option in ipairs(values) do
                     local item = create("TextButton", {
-                        Size = UDim2.new(1, 0, 0, 34),
+                        Size = UDim2.new(1, -4, 0, 34),
                         BackgroundTransparency = 1,
                         Text = tostring(option),
                         TextColor3 = LiquidUI.Theme.Text,
                         TextSize = 12,
                         Font = Enum.Font.Gotham,
-                        ZIndex = 11
+                        AutoButtonColor = false,
+                        ZIndex = 111
                     })
-                    item.Parent = list
-                    item.Activated:Connect(function()
+                    item.Parent = popup
+                    popupConnect(item.Activated, function()
                         dropdown:Set(option)
-                        open = false
-                        list:Destroy()
+                        dropdown:Close()
+                    end)
+                    popupConnect(item.MouseEnter, function()
+                        if item.Parent then item.BackgroundTransparency = 0.85 end
+                    end)
+                    popupConnect(item.MouseLeave, function()
+                        if item.Parent then item.BackgroundTransparency = 1 end
                     end)
                 end
-            end)
 
+                local height = math.min(#values * 34, 170)
+                popup.Size = UDim2.fromOffset(button.AbsoluteSize.X, height)
+                popup.CanvasSize = UDim2.fromOffset(0, #values * 34)
+                positionPopup()
+            end
+
+            connect(button.Activated, function()
+                if dropdown.IsOpen then dropdown:Close() else dropdown:Open() end
+            end)
+            connect(page:GetPropertyChangedSignal("CanvasPosition"), function()
+                if dropdown.IsOpen then positionPopup() end
+            end)
+            connect(gui:GetPropertyChangedSignal("AbsoluteSize"), function()
+                if dropdown.IsOpen then positionPopup() end
+            end)
             return dropdown
         end
 
         function tab:CreateKeybind(config)
+            if window.Destroyed then return nil end
             config = config or {}
             local key = config.Default or Enum.KeyCode.RightShift
             local listening = false
+            local button = self:CreateButton({Name = (config.Name or "Keybind") .. ": " .. key.Name})
 
-            local button = self:CreateButton({
-                Name = (config.Name or "Keybind") .. ": " .. key.Name
-            })
-
-            button.Activated:Connect(function()
+            connect(button.Activated, function()
                 listening = true
                 button.Text = (config.Name or "Keybind") .. ": ..."
             end)
 
-            local connection
-            connection = UserInputService.InputBegan:Connect(function(input, processed)
-                if processed then return end
-                if listening and input.UserInputType == Enum.UserInputType.Keyboard then
-                    key = input.KeyCode
-                    listening = false
+            local keybind = {}
+            function keybind:Get() return key end
+            function keybind:Set(newKey)
+                if typeof(newKey) == "EnumItem" and newKey.EnumType == Enum.KeyCode then
+                    key = newKey
                     button.Text = (config.Name or "Keybind") .. ": " .. key.Name
-                    return
                 end
-                if not listening and input.KeyCode == key and config.Callback then
-                    task.spawn(config.Callback)
-                end
-            end)
-
-            return {
-                Get = function() return key end,
-                Set = function(_, newKey) key = newKey end,
-                Disconnect = function() connection:Disconnect() end
-            }
-        end
-
-        function window:SelectTab(name)
-            for _, item in ipairs(self.Tabs) do
-                local active = item.Name == name
-                item.Page.Visible = active
-                animate(item.Button, {
-                    BackgroundTransparency = active and 0 or 1,
-                    TextColor3 = active and LiquidUI.Theme.Text or LiquidUI.Theme.Muted
-                })
             end
-            self.ActiveTab = name
+            function keybind:Disconnect()
+                listening = false
+                keybinds[keybind] = nil
+            end
+            keybinds[keybind] = {
+                GetKey = function() return key end,
+                IsListening = function() return listening end,
+                SetListening = function(value) listening = value end,
+                Button = button,
+                Config = config,
+                Name = config.Name or "Keybind",
+                Object = keybind
+            }
+            return keybind
         end
 
-        table.insert(window.Tabs, {
-            Name = tabName,
-            Button = button,
-            Page = page
-        })
-
-        button.Activated:Connect(function()
+        connect(tabButton.Activated, function()
             window:SelectTab(tabName)
         end)
 
-        if #window.Tabs == 1 then
-            window:SelectTab(tabName)
-        end
-
+        table.insert(window.Tabs, {Name = tabName, Button = tabButton, Page = page})
+        if #window.Tabs == 1 then window:SelectTab(tabName) end
         return tab
     end
 
+    function window:SelectTab(name)
+        if self.Destroyed then return end
+        closeDropdown()
+        for _, item in ipairs(self.Tabs) do
+            local active = item.Name == name
+            item.Page.Visible = active
+            animate(item.Button, {
+                BackgroundTransparency = active and 0 or 1,
+                TextColor3 = active and LiquidUI.Theme.Text or LiquidUI.Theme.Muted
+            })
+        end
+        self.ActiveTab = name
+    end
+
     function window:Notify(config)
+        if self.Destroyed then return nil end
         config = config or {}
         local toast = create("TextLabel", {
             AnchorPoint = Vector2.new(1, 1),
-            Position = UDim2.new(1, -18, 1, -18),
+            Position = UDim2.new(1, -18, 1, -18 - (#notifications * 66)),
             Size = UDim2.fromOffset(270, 58),
             BackgroundColor3 = LiquidUI.Theme.Surface,
             Text = "  " .. (config.Title or "Notification") .. "\n  " .. (config.Content or ""),
@@ -610,50 +701,99 @@ function LiquidUI:CreateWindow(options)
             Font = Enum.Font.GothamMedium,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextYAlignment = Enum.TextYAlignment.Center,
-            ZIndex = 50
+            ZIndex = 120
         })
-        toast.Parent = gui
+        toast.Parent = overlay
         corner(toast, 12)
         stroke(toast, LiquidUI.Theme.Border, 0.8)
+        table.insert(notifications, toast)
 
-        task.delay(config.Duration or 3, function()
-            if toast.Parent then
-                animate(toast, {BackgroundTransparency = 1, TextTransparency = 1}, 0.2)
-                task.wait(0.25)
-                toast:Destroy()
+        task.delay(math.max(tonumber(config.Duration) or 3, 0), function()
+            if window.Destroyed or not toast.Parent then return end
+            local tween = animate(toast, {BackgroundTransparency = 1, TextTransparency = 1}, 0.2)
+            if tween then
+                tween.Completed:Wait()
+            end
+            if toast.Parent then toast:Destroy() end
+            for i = #notifications, 1, -1 do
+                if notifications[i] == toast then
+                    table.remove(notifications, i)
+                    break
+                end
+            end
+            for i, item in ipairs(notifications) do
+                if item.Parent then
+                    animate(item, {Position = UDim2.new(1, -18, 1, -18 - ((i - 1) * 66))}, 0.15)
+                end
             end
         end)
-
         return toast
     end
 
     function window:SetVisible(visible)
-        main.Visible = visible
+        if not self.Destroyed then main.Visible = visible == true end
     end
 
     function window:Destroy()
         if self.Destroyed then return end
         self.Destroyed = true
-        gui:Destroy()
+        dragging = false
+        activeSlider = nil
+        closeDropdown()
+
+        for _, connection in ipairs(connections) do
+            if connection.Connected then
+                pcall(function() connection:Disconnect() end)
+            end
+        end
+        table.clear(connections)
+
+        for _, entry in ipairs(tweens) do
+            pcall(function() entry.Tween:Cancel() end)
+        end
+        table.clear(tweens)
+        table.clear(keybinds)
+        table.clear(notifications)
+
+        if gui.Parent then gui:Destroy() end
     end
 
-    close.Activated:Connect(function()
-        window:Destroy()
-    end)
+    connect(UserInputService.InputBegan, function(input, processed)
+        if window.Destroyed then return end
 
-    gui.Parent = player:WaitForChild("PlayerGui")
-
-    local dragging, dragStart, startPosition
-    topbar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPosition = main.Position
+            if input.Position.X >= topbar.AbsolutePosition.X
+                and input.Position.X <= topbar.AbsolutePosition.X + topbar.AbsoluteSize.X
+                and input.Position.Y >= topbar.AbsolutePosition.Y
+                and input.Position.Y <= topbar.AbsolutePosition.Y + topbar.AbsoluteSize.Y
+                and not (
+                    input.Position.X >= close.AbsolutePosition.X
+                    and input.Position.X <= close.AbsolutePosition.X + close.AbsoluteSize.X
+                    and input.Position.Y >= close.AbsolutePosition.Y
+                    and input.Position.Y <= close.AbsolutePosition.Y + close.AbsoluteSize.Y
+                ) then
+                dragging = true
+                dragStart = input.Position
+                startPosition = main.Position
+            end
+        end
+
+        for _, entry in pairs(keybinds) do
+            if entry.IsListening() and input.UserInputType == Enum.UserInputType.Keyboard then
+                entry.SetListening(false)
+                entry.Object:Set(input.KeyCode)
+                break
+            elseif not processed and not entry.IsListening()
+                and input.UserInputType == Enum.UserInputType.Keyboard
+                and input.KeyCode == entry.GetKey() and entry.Config.Callback then
+                task.spawn(entry.Config.Callback)
+            end
         end
     end)
 
-    UserInputService.InputChanged:Connect(function(input)
+    connect(UserInputService.InputChanged, function(input)
+        if window.Destroyed then return end
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
@@ -662,15 +802,26 @@ function LiquidUI:CreateWindow(options)
                 startPosition.Y.Scale, startPosition.Y.Offset + delta.Y
             )
         end
-    end)
 
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
+        if activeSlider and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            activeSlider.Update(input.Position.X)
         end
     end)
 
+    connect(UserInputService.InputEnded, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            activeSlider = nil
+        end
+    end)
+
+    connect(close.Activated, function()
+        window:Destroy()
+    end)
+
+    gui.Parent = playerGui
     return window
 end
 
