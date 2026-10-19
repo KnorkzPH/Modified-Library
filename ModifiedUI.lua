@@ -1,7 +1,7 @@
 local LiquidUI = {}
 LiquidUI.__index = LiquidUI
 
-LiquidUI.Version = "1.1.0"
+LiquidUI.Version = "1.2.0"
 LiquidUI.Theme = {
     Background = Color3.fromRGB(15, 17, 24),
     Surface = Color3.fromRGB(24, 27, 37),
@@ -154,9 +154,9 @@ function LiquidUI:CreateWindow(options)
     local title = create("TextLabel", {
         Name = "Title",
         Position = UDim2.fromOffset(18, 0),
-        Size = UDim2.new(1, -80, 1, 0),
+        Size = UDim2.new(1, -120, 1, 0),
         BackgroundTransparency = 1,
-        Text = options.Title or "LiquidUI",
+        Text = options.Author and ((options.Title or "LiquidUI") .. "  •  " .. tostring(options.Author)) or (options.Title or "LiquidUI"),
         TextColor3 = self.Theme.Text,
         TextSize = 17,
         Font = Enum.Font.GothamSemibold,
@@ -178,10 +178,25 @@ function LiquidUI:CreateWindow(options)
     close.Parent = topbar
     corner(close, 9)
 
+    local minimize = create("TextButton", {
+        Name = "Minimize",
+        Size = UDim2.fromOffset(32, 32),
+        Position = UDim2.new(1, -80, 0.5, -16),
+        BackgroundColor3 = self.Theme.SurfaceLight,
+        Text = "−",
+        TextColor3 = self.Theme.Text,
+        TextSize = 22,
+        Font = Enum.Font.GothamMedium,
+        AutoButtonColor = false
+    })
+    minimize.Parent = topbar
+    corner(minimize, 9)
+
+    local sidebarWidth = math.max(tonumber(options.SidebarWidth) or 155, 110)
     local sidebar = create("Frame", {
         Name = "Sidebar",
         Position = UDim2.fromOffset(0, 54),
-        Size = UDim2.new(0, 155, 1, -54),
+        Size = UDim2.new(0, sidebarWidth, 1, -54),
         BackgroundColor3 = self.Theme.Surface,
         BackgroundTransparency = 0.25,
         BorderSizePixel = 0
@@ -201,8 +216,8 @@ function LiquidUI:CreateWindow(options)
 
     local content = create("Frame", {
         Name = "Content",
-        Position = UDim2.new(0, 155, 0, 54),
-        Size = UDim2.new(1, -155, 1, -54),
+        Position = UDim2.new(0, sidebarWidth, 0, 54),
+        Size = UDim2.new(1, -sidebarWidth, 1, -54),
         BackgroundTransparency = 1
     })
     content.Parent = main
@@ -217,16 +232,21 @@ function LiquidUI:CreateWindow(options)
     overlay.Parent = gui
 
     local dragging, dragStart, startPosition, activeSlider
+    local minimized = false
+    local expandedSize = main.Size
     local keybinds = {}
     local openDropdown
 
     local function closeDropdown()
         if openDropdown then
-            if openDropdown.Popup then
-                openDropdown.Popup:Destroy()
-            end
-            openDropdown.IsOpen = false
+            local dropdown = openDropdown
             openDropdown = nil
+            if dropdown.Close then
+                dropdown:Close()
+            else
+                if dropdown.Popup then dropdown.Popup:Destroy() end
+                dropdown.IsOpen = false
+            end
         end
     end
 
@@ -664,6 +684,125 @@ function LiquidUI:CreateWindow(options)
             return keybind
         end
 
+        function tab:CreateParagraph(config)
+            if window.Destroyed then return nil end
+            config = config or {}
+            local holder = create("Frame", {
+                Name = config.Name or "Paragraph",
+                Size = UDim2.new(1, -4, 0, 64),
+                BackgroundColor3 = LiquidUI.Theme.Surface,
+                BorderSizePixel = 0
+            })
+            holder.Parent = page
+            corner(holder, 10)
+            stroke(holder, LiquidUI.Theme.Border, 0.92, 1)
+            local heading = create("TextLabel", {
+                Position = UDim2.fromOffset(12, 7),
+                Size = UDim2.new(1, -24, 0, 18),
+                BackgroundTransparency = 1,
+                Text = config.Title or config.Name or "Information",
+                TextColor3 = LiquidUI.Theme.Text,
+                TextSize = 13,
+                Font = Enum.Font.GothamSemibold,
+                TextXAlignment = Enum.TextXAlignment.Left
+            })
+            heading.Parent = holder
+            local description = create("TextLabel", {
+                Position = UDim2.fromOffset(12, 27),
+                Size = UDim2.new(1, -24, 1, -33),
+                BackgroundTransparency = 1,
+                Text = config.Desc or config.Content or "",
+                TextColor3 = LiquidUI.Theme.Muted,
+                TextSize = 12,
+                Font = Enum.Font.Gotham,
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                AutomaticSize = Enum.AutomaticSize.Y
+            })
+            description.Parent = holder
+            local paragraph = {}
+            function paragraph:SetTitle(value) heading.Text = tostring(value or "") end
+            function paragraph:SetDesc(value) description.Text = tostring(value or "") end
+            function paragraph:SetText(value) description.Text = tostring(value or "") end
+            return paragraph
+        end
+
+        function tab:CreateLabel(textValue)
+            if window.Destroyed then return nil end
+            local label = create("TextLabel", {
+                Size = UDim2.new(1, -4, 0, 28),
+                BackgroundTransparency = 1,
+                Text = tostring(textValue or "Label"),
+                TextColor3 = LiquidUI.Theme.Text,
+                TextSize = 13,
+                Font = Enum.Font.Gotham,
+                TextXAlignment = Enum.TextXAlignment.Left
+            })
+            label.Parent = page
+            return label
+        end
+
+        function tab:CreateDivider()
+            if window.Destroyed then return nil end
+            local divider = create("Frame", {
+                Size = UDim2.new(1, -4, 0, 1),
+                BackgroundColor3 = LiquidUI.Theme.Border,
+                BackgroundTransparency = 0.85,
+                BorderSizePixel = 0
+            })
+            divider.Parent = page
+            return divider
+        end
+
+        -- WindUI-style API aliases
+        function tab:Section(config)
+            if type(config) == "table" then return self:AddSection(config.Title or config.Name) end
+            return self:AddSection(config)
+        end
+        function tab:Button(config)
+            config = config or {}
+            config.Name = config.Name or config.Title or "Button"
+            return self:CreateButton(config)
+        end
+        function tab:Toggle(config)
+            config = config or {}
+            config.Name = config.Name or config.Title or "Toggle"
+            if config.Default == nil then config.Default = config.Value end
+            return self:CreateToggle(config)
+        end
+        function tab:Slider(config)
+            config = config or {}
+            config.Name = config.Name or config.Title or "Slider"
+            if config.Default == nil then config.Default = config.Value end
+            return self:CreateSlider(config)
+        end
+        function tab:Input(config)
+            config = config or {}
+            config.Name = config.Name or config.Title or "Input"
+            if config.Default == nil then config.Default = config.Value end
+            if config.Placeholder == nil then config.Placeholder = config.PlaceholderText end
+            return self:CreateInput(config)
+        end
+        function tab:Dropdown(config)
+            config = config or {}
+            config.Name = config.Name or config.Title or "Dropdown"
+            if config.Options == nil then config.Options = config.Values end
+            if config.Default == nil then config.Default = config.Value end
+            return self:CreateDropdown(config)
+        end
+        function tab:Keybind(config)
+            config = config or {}
+            config.Name = config.Name or config.Title or "Keybind"
+            if config.Default == nil then config.Default = config.Value end
+            return self:CreateKeybind(config)
+        end
+        function tab:Paragraph(config) return self:CreateParagraph(config) end
+        function tab:Label(config)
+            return self:CreateLabel(type(config) == "table" and (config.Title or config.Text or config.Name) or config)
+        end
+        function tab:Divider() return self:CreateDivider() end
+
         connect(tabButton.Activated, function()
             window:SelectTab(tabName)
         end)
@@ -671,6 +810,47 @@ function LiquidUI:CreateWindow(options)
         table.insert(window.Tabs, {Name = tabName, Button = tabButton, Page = page})
         if #window.Tabs == 1 then window:SelectTab(tabName) end
         return tab
+    end
+
+    function window:Tab(tabOptions)
+        tabOptions = tabOptions or {}
+        tabOptions.Name = tabOptions.Name or tabOptions.Title or "Tab"
+        return self:CreateTab(tabOptions)
+    end
+
+    function window:SetTitle(value)
+        if not self.Destroyed and title.Parent then title.Text = tostring(value or "") end
+    end
+
+    function window:SetSize(value)
+        if not self.Destroyed and typeof(value) == "UDim2" then
+            expandedSize = value
+            if not minimized then main.Size = value end
+        end
+    end
+
+    function window:Toggle()
+        if not self.Destroyed then main.Visible = not main.Visible end
+    end
+
+    function window:Minimize(value)
+        if self.Destroyed then return end
+        local nextState = value == nil and not minimized or value == true
+        if nextState == minimized then return end
+        if nextState then
+            expandedSize = main.Size
+            minimized = true
+            sidebar.Visible = false
+            content.Visible = false
+            animate(main, {Size = UDim2.new(expandedSize.X.Scale, expandedSize.X.Offset, 0, 54)}, 0.2)
+            minimize.Text = "+"
+        else
+            minimized = false
+            sidebar.Visible = true
+            content.Visible = true
+            animate(main, {Size = expandedSize}, 0.2)
+            minimize.Text = "−"
+        end
     end
 
     function window:SelectTab(name)
@@ -768,10 +948,14 @@ function LiquidUI:CreateWindow(options)
                 and input.Position.Y >= topbar.AbsolutePosition.Y
                 and input.Position.Y <= topbar.AbsolutePosition.Y + topbar.AbsoluteSize.Y
                 and not (
-                    input.Position.X >= close.AbsolutePosition.X
+                    (input.Position.X >= close.AbsolutePosition.X
                     and input.Position.X <= close.AbsolutePosition.X + close.AbsoluteSize.X
                     and input.Position.Y >= close.AbsolutePosition.Y
-                    and input.Position.Y <= close.AbsolutePosition.Y + close.AbsoluteSize.Y
+                    and input.Position.Y <= close.AbsolutePosition.Y + close.AbsoluteSize.Y)
+                    or (input.Position.X >= minimize.AbsolutePosition.X
+                    and input.Position.X <= minimize.AbsolutePosition.X + minimize.AbsoluteSize.X
+                    and input.Position.Y >= minimize.AbsolutePosition.Y
+                    and input.Position.Y <= minimize.AbsolutePosition.Y + minimize.AbsoluteSize.Y)
                 ) then
                 dragging = true
                 dragStart = input.Position
@@ -819,6 +1003,10 @@ function LiquidUI:CreateWindow(options)
 
     connect(close.Activated, function()
         window:Destroy()
+    end)
+
+    connect(minimize.Activated, function()
+        window:Minimize()
     end)
 
     gui.Parent = playerGui
