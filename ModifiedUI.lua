@@ -1,29 +1,28 @@
 --[[
-    LiquidUI - Clean Core Library v3.4.0
-    - Fully removed window outline / overlay frames
-    - Added resizing input blocker to prevent accidental clicks on buttons/sliders while resizing
-    - Added a clean circle knob (thumb) back to sliders
-    - Lucide icon mapping support for tabs & square toggle button
+    LiquidUI - Clean Core Library v3.5.0 Enterprise Edition
+    - Fully fixed all unrounded frames, adding clean UICorner and UIStroke mappings across every container.
+    - Added Dropdown and Keybind components alongside upgraded Buttons, Toggles, Sliders, and Inputs.
+    - Captivating modern dark glass aesthetic with optimized touch and resize blocks.
 ]]
 
 local LiquidUI = {}
 LiquidUI.__index = LiquidUI
 
-LiquidUI.Version = "3.4.0"
+LiquidUI.Version = "3.5.0"
 
 LiquidUI.Theme = {
-    Background = Color3.fromRGB(3, 3, 4),
-    Surface = Color3.fromRGB(8, 8, 10),
-    SurfaceLight = Color3.fromRGB(15, 15, 18),
-    SurfaceHover = Color3.fromRGB(23, 23, 27),
-    Accent = Color3.fromRGB(45, 130, 215),
-    AccentLight = Color3.fromRGB(140, 200, 255),
-    Text = Color3.fromRGB(245, 247, 250),
-    SubText = Color3.fromRGB(155, 163, 177),
-    Border = Color3.fromRGB(76, 87, 105),
-    BorderLight = Color3.fromRGB(132, 151, 180),
-    Success = Color3.fromRGB(80, 220, 155),
-    Danger = Color3.fromRGB(255, 100, 115)
+    Background = Color3.fromRGB(4, 4, 6),
+    Surface = Color3.fromRGB(10, 11, 14),
+    SurfaceLight = Color3.fromRGB(16, 18, 23),
+    SurfaceHover = Color3.fromRGB(24, 27, 34),
+    Accent = Color3.fromRGB(59, 142, 234),
+    AccentLight = Color3.fromRGB(153, 210, 255),
+    Text = Color3.fromRGB(248, 250, 252),
+    SubText = Color3.fromRGB(148, 163, 184),
+    Border = Color3.fromRGB(51, 65, 85),
+    BorderLight = Color3.fromRGB(100, 116, 139),
+    Success = Color3.fromRGB(74, 222, 128),
+    Danger = Color3.fromRGB(248, 113, 113)
 }
 
 local LucideIcons = {
@@ -144,17 +143,17 @@ function LiquidUI:CreateWindow(options)
     local minimized = false
     local windowVisible = true
 
-    local minimum = options.MinSize or Vector2.new(360, 300)
+    local minimum = options.MinSize or Vector2.new(400, 320)
     local maximum = options.MaxSize or Vector2.new(1400, 900)
-    local requestedSize = options.Size or UDim2.fromOffset(900, 580)
+    local requestedSize = options.Size or UDim2.fromOffset(920, 600)
 
     local viewport = Viewport()
-    local width = Clamp(requestedSize.X.Offset > 0 and requestedSize.X.Offset or 900, math.min(minimum.X, viewport.X), math.min(maximum.X, viewport.X))
-    local height = Clamp(requestedSize.Y.Offset > 0 and requestedSize.Y.Offset or 580, math.min(minimum.Y, viewport.Y), math.min(maximum.Y, viewport.Y))
+    local width = Clamp(requestedSize.X.Offset > 0 and requestedSize.X.Offset or 920, math.min(minimum.X, viewport.X), math.min(maximum.X, viewport.X))
+    local height = Clamp(requestedSize.Y.Offset > 0 and requestedSize.Y.Offset or 600, math.min(minimum.Y, viewport.Y), math.min(maximum.Y, viewport.Y))
     local savedSize = Vector2.new(width, height)
 
     local gui = Create("ScreenGui", {
-        Name = "LiquidUI_Clean",
+        Name = "LiquidUI_Enterprise",
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -179,22 +178,22 @@ function LiquidUI:CreateWindow(options)
         Name = "FloatingToggle",
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -12, 0.5, 0),
-        Size = UDim2.fromOffset(42, 42),
+        Size = UDim2.fromOffset(44, 44),
         BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.1,
+        BackgroundTransparency = 0.05,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
         ZIndex = 500,
         Parent = gui
     })
-    Corner(FloatingToggle, 8)
+    Corner(FloatingToggle, 10)
     Stroke(FloatingToggle, theme.BorderLight, 0.3, 1)
 
     Create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(20, 20),
+        Size = UDim2.fromOffset(22, 22),
         BackgroundTransparency = 1,
         Image = LiquidUI:GetIcon(options.Logo or "home"),
         ImageColor3 = theme.AccentLight,
@@ -206,7 +205,7 @@ function LiquidUI:CreateWindow(options)
     local opening = Create("Frame", {
         Name = "OpeningLayer",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.fromRGB(2, 2, 3),
+        BackgroundColor3 = Color3.fromRGB(2, 2, 4),
         BorderSizePixel = 0,
         ZIndex = 100,
         Parent = gui
@@ -214,31 +213,31 @@ function LiquidUI:CreateWindow(options)
 
     Create("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(10, 12, 18)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(2, 2, 3)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(9, 10, 14))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 14, 20)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(3, 3, 5)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 12, 16))
         }),
-        Rotation = 35,
+        Rotation = 45,
         Parent = opening
     })
 
     local openingCard = Create("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.fromOffset(350, 255),
+        Size = UDim2.fromOffset(360, 260),
         BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.08,
+        BackgroundTransparency = 0.05,
         BorderSizePixel = 0,
         ZIndex = 101,
         Parent = opening
     })
-    Corner(openingCard, 16)
+    Corner(openingCard, 14)
     Stroke(openingCard, theme.BorderLight, 0.2, 1)
 
     local openingAccent = Create("Frame", {
-        Position = UDim2.fromOffset(22, 20),
-        Size = UDim2.fromOffset(54, 54),
-        BackgroundColor3 = Color3.fromRGB(15, 17, 22),
+        Position = UDim2.fromOffset(24, 22),
+        Size = UDim2.fromOffset(52, 52),
+        BackgroundColor3 = theme.SurfaceLight,
         BorderSizePixel = 0,
         ZIndex = 102,
         Parent = openingCard
@@ -252,24 +251,24 @@ function LiquidUI:CreateWindow(options)
     openingLogo.ZIndex = 103
 
     local openingTitle = Label(openingCard, options.Title or "LiquidUI", 20, theme.Text, true)
-    openingTitle.Position = UDim2.fromOffset(22, 88)
-    openingTitle.Size = UDim2.new(1, -44, 0, 30)
+    openingTitle.Position = UDim2.fromOffset(24, 88)
+    openingTitle.Size = UDim2.new(1, -48, 0, 30)
     openingTitle.ZIndex = 102
 
-    local openingSubtitle = Label(openingCard, options.Subtitle or "MODERN INTERFACE", 10, theme.SubText, false)
-    openingSubtitle.Position = UDim2.fromOffset(23, 118)
-    openingSubtitle.Size = UDim2.new(1, -46, 0, 20)
+    local openingSubtitle = Label(openingCard, options.Subtitle or "ENTERPRISE SUITE", 10, theme.SubText, false)
+    openingSubtitle.Position = UDim2.fromOffset(24, 118)
+    openingSubtitle.Size = UDim2.new(1, -48, 0, 20)
     openingSubtitle.ZIndex = 102
 
     local loadingTrack = Create("Frame", {
-        Position = UDim2.new(0, 23, 0, 166),
-        Size = UDim2.new(1, -46, 0, 4),
-        BackgroundColor3 = Color3.fromRGB(35, 37, 43),
+        Position = UDim2.new(0, 24, 0, 168),
+        Size = UDim2.new(1, -48, 0, 6),
+        BackgroundColor3 = theme.SurfaceLight,
         BorderSizePixel = 0,
         ZIndex = 102,
         Parent = openingCard
     })
-    Corner(loadingTrack, 2)
+    Corner(loadingTrack, 3)
 
     local loadingFill = Create("Frame", {
         Size = UDim2.new(0, 0, 1, 0),
@@ -278,31 +277,31 @@ function LiquidUI:CreateWindow(options)
         ZIndex = 103,
         Parent = loadingTrack
     })
-    Corner(loadingFill, 2)
+    Corner(loadingFill, 3)
 
-    local openingStatus = Label(openingCard, "LOADING SYSTEM", 10, theme.SubText, false)
-    openingStatus.Position = UDim2.fromOffset(23, 180)
-    openingStatus.Size = UDim2.new(1, -46, 0, 20)
+    local openingStatus = Label(openingCard, "INITIALIZING MODULES", 10, theme.SubText, false)
+    openingStatus.Position = UDim2.fromOffset(24, 184)
+    openingStatus.Size = UDim2.new(1, -48, 0, 20)
     openingStatus.ZIndex = 102
 
-    -- Main Window (No Overlay/Outline Frame at all)
+    -- Main Window Container
     local window = Create("Frame", {
         Name = "MainWindow",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromOffset(viewport.X / 2, viewport.Y / 2),
         Size = UDim2.fromOffset(width, height),
         BackgroundColor3 = theme.Background,
-        BackgroundTransparency = 0.02,
+        BackgroundTransparency = 0.01,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Visible = false,
         ZIndex = 2,
         Parent = gui
     })
-    Corner(window, 12)
-    Stroke(window, theme.Border, 0.25, 1)
+    Corner(window, 14)
+    Stroke(window, theme.Border, 0.3, 1)
 
-    -- Invisible Resizing Input Blocker Overlay (Active only when resizing)
+    -- Invisible Resizing Input Blocker Overlay
     local resizeBlocker = Create("TextButton", {
         Name = "ResizeInputBlocker",
         Size = UDim2.fromScale(1, 1),
@@ -316,8 +315,8 @@ function LiquidUI:CreateWindow(options)
 
     local topbar = Create("Frame", {
         Name = "Topbar",
-        Size = UDim2.new(1, 0, 0, 60),
-        BackgroundColor3 = Color3.fromRGB(6, 6, 8),
+        Size = UDim2.new(1, 0, 0, 62),
+        BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         Active = true,
@@ -326,14 +325,14 @@ function LiquidUI:CreateWindow(options)
     })
 
     local logoBox = Create("Frame", {
-        Position = UDim2.fromOffset(14, 10),
+        Position = UDim2.fromOffset(14, 11),
         Size = UDim2.fromOffset(40, 40),
         BackgroundColor3 = theme.SurfaceLight,
         BorderSizePixel = 0,
         ZIndex = 4,
         Parent = topbar
     })
-    Corner(logoBox, 8)
+    Corner(logoBox, 10)
     Stroke(logoBox, theme.Border, 0.3, 1)
 
     local logoText = Label(logoBox, options.Logo or "L", 18, theme.AccentLight, true)
@@ -341,18 +340,18 @@ function LiquidUI:CreateWindow(options)
     logoText.Size = UDim2.fromScale(1, 1)
     logoText.ZIndex = 5
 
-    local titleLabel = Label(topbar, options.Title or "LiquidUI", 14, theme.Text, true)
-    titleLabel.Position = UDim2.fromOffset(64, 9)
-    titleLabel.Size = UDim2.new(1, -160, 0, 22)
+    local titleLabel = Label(topbar, options.Title or "LiquidUI", 15, theme.Text, true)
+    titleLabel.Position = UDim2.fromOffset(66, 10)
+    titleLabel.Size = UDim2.new(1, -170, 0, 22)
     titleLabel.ZIndex = 4
 
-    local subtitle = Label(topbar, options.Subtitle or "Interface Suite", 11, theme.SubText, false)
-    subtitle.Position = UDim2.fromOffset(64, 29)
-    subtitle.Size = UDim2.new(1, -160, 0, 18)
+    local subtitle = Label(topbar, options.Subtitle or "Enterprise Suite", 11, theme.SubText, false)
+    subtitle.Position = UDim2.fromOffset(66, 32)
+    subtitle.Size = UDim2.new(1, -170, 0, 18)
     subtitle.ZIndex = 4
 
     local minimizeButton = Create("TextButton", {
-        Position = UDim2.new(1, -76, 0, 15),
+        Position = UDim2.new(1, -76, 0, 16),
         Size = UDim2.fromOffset(28, 30),
         BackgroundTransparency = 1,
         Text = "−",
@@ -365,7 +364,7 @@ function LiquidUI:CreateWindow(options)
     })
 
     local closeButton = Create("TextButton", {
-        Position = UDim2.new(1, -42, 0, 15),
+        Position = UDim2.new(1, -42, 0, 16),
         Size = UDim2.fromOffset(28, 30),
         BackgroundTransparency = 1,
         Text = "×",
@@ -378,7 +377,7 @@ function LiquidUI:CreateWindow(options)
     })
 
     Create("Frame", {
-        Position = UDim2.new(0, 0, 0, 60),
+        Position = UDim2.new(0, 0, 0, 62),
         Size = UDim2.new(1, 0, 0, 1),
         BackgroundColor3 = theme.Border,
         BackgroundTransparency = 0.5,
@@ -389,10 +388,10 @@ function LiquidUI:CreateWindow(options)
 
     local sidebar = Create("Frame", {
         Name = "Sidebar",
-        Position = UDim2.fromOffset(0, 61),
-        Size = UDim2.new(0, 160, 1, -61),
-        BackgroundColor3 = Color3.fromRGB(5, 5, 7),
-        BackgroundTransparency = 0.2,
+        Position = UDim2.fromOffset(0, 63),
+        Size = UDim2.new(0, 170, 1, -63),
+        BackgroundColor3 = theme.Surface,
+        BackgroundTransparency = 0.25,
         BorderSizePixel = 0,
         ZIndex = 3,
         Parent = window
@@ -400,8 +399,8 @@ function LiquidUI:CreateWindow(options)
 
     local tabList = Create("ScrollingFrame", {
         Name = "TabList",
-        Position = UDim2.fromOffset(8, 10),
-        Size = UDim2.new(1, -16, 1, -20),
+        Position = UDim2.fromOffset(10, 12),
+        Size = UDim2.new(1, -20, 1, -24),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ScrollBarThickness = 0,
@@ -419,8 +418,8 @@ function LiquidUI:CreateWindow(options)
 
     local content = Create("Frame", {
         Name = "Content",
-        Position = UDim2.new(0, 160, 0, 61),
-        Size = UDim2.new(1, -160, 1, -61),
+        Position = UDim2.new(0, 170, 0, 63),
+        Size = UDim2.new(1, -170, 1, -63),
         BackgroundTransparency = 1,
         ClipsDescendants = true,
         ZIndex = 3,
@@ -428,8 +427,8 @@ function LiquidUI:CreateWindow(options)
     })
 
     local header = Create("Frame", {
-        Position = UDim2.fromOffset(16, 12),
-        Size = UDim2.new(1, -32, 0, 40),
+        Position = UDim2.fromOffset(18, 14),
+        Size = UDim2.new(1, -36, 0, 42),
         BackgroundTransparency = 1,
         ZIndex = 4,
         Parent = content
@@ -439,15 +438,15 @@ function LiquidUI:CreateWindow(options)
     pageTitle.Size = UDim2.new(1, 0, 0, 22)
     pageTitle.ZIndex = 5
 
-    local pageSubtitle = Label(header, "Active workspace system.", 11, theme.SubText, false)
-    pageSubtitle.Position = UDim2.fromOffset(0, 21)
-    pageSubtitle.Size = UDim2.new(1, 0, 0, 16)
+    local pageSubtitle = Label(header, "Enterprise workspace active.", 11, theme.SubText, false)
+    pageSubtitle.Position = UDim2.fromOffset(0, 22)
+    pageSubtitle.Size = UDim2.new(1, 0, 0, 18)
     pageSubtitle.ZIndex = 5
 
     local pageHolder = Create("Frame", {
         Name = "Pages",
-        Position = UDim2.fromOffset(14, 56),
-        Size = UDim2.new(1, -28, 1, -66),
+        Position = UDim2.new(0, 16, 0, 60),
+        Size = UDim2.new(1, -32, 1, -70),
         BackgroundTransparency = 1,
         ClipsDescendants = true,
         ZIndex = 4,
@@ -457,11 +456,11 @@ function LiquidUI:CreateWindow(options)
     local resizeGrip = Create("TextButton", {
         Name = "ResizeGrip",
         AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, -2, 1, -2),
+        Position = UDim2.new(1, -3, 1, -3),
         Size = UDim2.fromOffset(16, 16),
         BackgroundTransparency = 1,
         Text = "◢",
-        TextSize = 11,
+        TextSize = 12,
         TextColor3 = theme.SubText,
         AutoButtonColor = false,
         Active = true,
@@ -492,7 +491,7 @@ function LiquidUI:CreateWindow(options)
             local selected = item == tab
             item.Page.Visible = selected
             item.Button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Surface
-            item.Button.BackgroundTransparency = selected and 0.1 or 0.6
+            item.Button.BackgroundTransparency = selected and 0.05 or 0.7
             item.Indicator.BackgroundTransparency = selected and 0 or 1
             item.Label.TextColor3 = selected and theme.Text or theme.SubText
             item.Icon.ImageColor3 = selected and theme.AccentLight or theme.SubText
@@ -501,14 +500,14 @@ function LiquidUI:CreateWindow(options)
 
     local function MakeCard(parent, cardHeight)
         local card = Create("Frame", {
-            Size = UDim2.new(1, 0, 0, cardHeight or 46),
+            Size = UDim2.new(1, 0, 0, cardHeight or 48),
             BackgroundColor3 = theme.Surface,
-            BackgroundTransparency = 0.2,
+            BackgroundTransparency = 0.15,
             BorderSizePixel = 0,
             Parent = parent
         })
-        Corner(card, 8)
-        Stroke(card, theme.Border, 0.6, 1)
+        Corner(card, 10)
+        Stroke(card, theme.Border, 0.5, 1)
         return card
     end
 
@@ -530,19 +529,19 @@ function LiquidUI:CreateWindow(options)
         name = tostring(name or ("Tab " .. (#tabs + 1)))
 
         local tabButton = Create("TextButton", {
-            Size = UDim2.new(1, 0, 0, 36),
+            Size = UDim2.new(1, 0, 0, 38),
             BackgroundColor3 = theme.Surface,
-            BackgroundTransparency = 0.6,
+            BackgroundTransparency = 0.7,
             BorderSizePixel = 0,
             Text = "",
             AutoButtonColor = false,
             Parent = tabList
         })
-        Corner(tabButton, 8)
+        Corner(tabButton, 9)
 
         local indicator = Create("Frame", {
-            Position = UDim2.fromOffset(0, 6),
-            Size = UDim2.new(0, 2, 1, -12),
+            Position = UDim2.fromOffset(0, 7),
+            Size = UDim2.new(0, 3, 1, -14),
             BackgroundColor3 = theme.AccentLight,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
@@ -551,7 +550,7 @@ function LiquidUI:CreateWindow(options)
         Corner(indicator, 2)
 
         local icon = Create("ImageLabel", {
-            Position = UDim2.fromOffset(10, 10),
+            Position = UDim2.fromOffset(11, 11),
             Size = UDim2.fromOffset(16, 16),
             BackgroundTransparency = 1,
             Image = LiquidUI:GetIcon(iconName or "home"),
@@ -560,8 +559,8 @@ function LiquidUI:CreateWindow(options)
         })
 
         local tabLabel = Label(tabButton, name, 12, theme.SubText, true)
-        tabLabel.Position = UDim2.fromOffset(34, 0)
-        tabLabel.Size = UDim2.new(1, -38, 1, 0)
+        tabLabel.Position = UDim2.fromOffset(36, 0)
+        tabLabel.Size = UDim2.new(1, -40, 1, 0)
         tabLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
         local page = Create("ScrollingFrame", {
@@ -569,14 +568,14 @@ function LiquidUI:CreateWindow(options)
             Size = UDim2.fromScale(1, 1),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            ScrollBarThickness = 2,
+            ScrollBarThickness = 3,
             ScrollBarImageColor3 = theme.BorderLight,
             CanvasSize = UDim2.new(),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
             Visible = false,
             Parent = pageHolder
         })
-        AddPadding(page, 0, 4, 0, 6)
+        AddPadding(page, 0, 6, 0, 8)
 
         Create("UIListLayout", {
             Padding = UDim.new(0, 8),
@@ -604,7 +603,7 @@ function LiquidUI:CreateWindow(options)
 
         function api:AddSection(sectionName)
             local section = Create("Frame", {
-                Size = UDim2.new(1, 0, 0, 22),
+                Size = UDim2.new(1, 0, 0, 24),
                 BackgroundTransparency = 1,
                 Parent = page
             })
@@ -616,7 +615,7 @@ function LiquidUI:CreateWindow(options)
 
         function api:CreateButton(config)
             config = config or {}
-            local card = MakeCard(page, config.Height or 44)
+            local card = MakeCard(page, config.Height || 46)
 
             local control = Create("TextButton", {
                 Size = UDim2.fromScale(1, 1),
@@ -626,9 +625,9 @@ function LiquidUI:CreateWindow(options)
                 Parent = card
             })
 
-            local text = Label(card, config.Name or "Button", 12, theme.Text, true)
-            text.Position = UDim2.fromOffset(12, 0)
-            text.Size = UDim2.new(1, -40, 1, 0)
+            local text = Label(card, config.Name or "Button", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(14, 0)
+            text.Size = UDim2.new(1, -45, 1, 0)
 
             Connect(control.MouseEnter, function()
                 PlayTween(card, 0.12, { BackgroundColor3 = theme.SurfaceHover })
@@ -650,32 +649,32 @@ function LiquidUI:CreateWindow(options)
         function api:CreateToggle(config)
             config = config or {}
             local value = config.Default == true
-            local card = MakeCard(page, config.Height or 52)
+            local card = MakeCard(page, config.Height or 54)
 
-            local text = Label(card, config.Name or "Toggle", 12, theme.Text, true)
-            text.Position = UDim2.fromOffset(12, 6)
-            text.Size = UDim2.new(1, -75, 0, 18)
+            local text = Label(card, config.Name or "Toggle", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(14, 6)
+            text.Size = UDim2.new(1, -80, 0, 20)
 
             if config.Description then
                 local desc = Label(card, config.Description, 10, theme.SubText, false)
-                desc.Position = UDim2.fromOffset(12, 24)
-                desc.Size = UDim2.new(1, -75, 0, 16)
+                desc.Position = UDim2.fromOffset(14, 26)
+                desc.Size = UDim2.new(1, -80, 0, 18)
             end
 
             local switch = Create("TextButton", {
                 AnchorPoint = Vector2.new(1, 0.5),
-                Position = UDim2.new(1, -12, 0.5, 0),
-                Size = UDim2.fromOffset(36, 20),
-                BackgroundColor3 = value and theme.Accent or Color3.fromRGB(40, 40, 48),
+                Position = UDim2.new(1, -14, 0.5, 0),
+                Size = UDim2.fromOffset(40, 22),
+                BackgroundColor3 = value and theme.Accent or Color3.fromRGB(45, 45, 55),
                 BorderSizePixel = 0,
                 Text = "",
                 AutoButtonColor = false,
                 Parent = card
             })
-            Corner(switch, 10)
+            Corner(switch, 11)
 
             local knob = Create("Frame", {
-                Position = value and UDim2.new(1, -17, 0, 2) or UDim2.fromOffset(2, 2),
+                Position = value and UDim2.new(1, -19, 0, 3) or UDim2.fromOffset(3, 3),
                 Size = UDim2.fromOffset(16, 16),
                 BackgroundColor3 = Color3.fromRGB(255, 255, 255),
                 BorderSizePixel = 0,
@@ -685,8 +684,8 @@ function LiquidUI:CreateWindow(options)
 
             local function SetValue(nv, fire)
                 value = nv == true
-                PlayTween(switch, 0.12, { BackgroundColor3 = value and theme.Accent or Color3.fromRGB(40, 40, 48) })
-                PlayTween(knob, 0.12, { Position = value and UDim2.new(1, -17, 0, 2) or UDim2.fromOffset(2, 2) })
+                PlayTween(switch, 0.12, { BackgroundColor3 = value and theme.Accent or Color3.fromRGB(45, 45, 55) })
+                PlayTween(knob, 0.12, { Position = value and UDim2.new(1, -19, 0, 3) or UDim2.fromOffset(3, 3) })
                 if fire ~= false then Callback(config.Callback, value) end
             end
 
@@ -703,26 +702,27 @@ function LiquidUI:CreateWindow(options)
             local minVal = tonumber(config.Min) or 0
             local maxVal = tonumber(config.Max) or 100
             local value = Clamp(tonumber(config.Default) or minVal, minVal, maxVal)
-            local card = MakeCard(page, 64)
+            local card = MakeCard(page, 66)
 
-            local text = Label(card, config.Name or "Slider", 12, theme.Text, true)
-            text.Position = UDim2.fromOffset(12, 6)
-            text.Size = UDim2.new(1, -70, 0, 18)
+            local text = Label(card, config.Name or "Slider", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(14, 6)
+            text.Size = UDim2.new(1, -75, 0, 20)
 
             local valLabel = Label(card, tostring(value), 11, theme.AccentLight, true)
             valLabel.TextXAlignment = Enum.TextXAlignment.Right
-            valLabel.Position = UDim2.new(1, -60, 0, 6)
-            valLabel.Size = UDim2.fromOffset(48, 18)
+            valLabel.Position = UDim2.new(1, -65, 0, 6)
+            valLabel.Size = UDim2.fromOffset(50, 20)
 
             local bar = Create("Frame", {
-                Position = UDim2.new(0, 12, 0, 38),
-                Size = UDim2.new(1, -24, 0, 5),
-                BackgroundColor3 = Color3.fromRGB(35, 35, 42),
+                Position = UDim2.new(0, 14, 0, 40),
+                Size = UDim2.new(1, -28, 0, 6),
+                BackgroundColor3 = theme.SurfaceLight,
                 BorderSizePixel = 0,
                 Active = true,
                 Parent = card
             })
             Corner(bar, 3)
+            Stroke(bar, theme.Border, 0.4, 1)
 
             local function Ratio(v)
                 if maxVal == minVal then return 0 end
@@ -737,17 +737,16 @@ function LiquidUI:CreateWindow(options)
             })
             Corner(fill, 3)
 
-            -- Slider Circle Knob (Thumb)
             local sliderCircle = Create("Frame", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
                 Position = UDim2.new(Ratio(value), 0, 0.5, 0),
-                Size = UDim2.fromOffset(12, 12),
+                Size = UDim2.fromOffset(14, 14),
                 BackgroundColor3 = Color3.fromRGB(255, 255, 255),
                 BorderSizePixel = 0,
                 Parent = bar
             })
-            Corner(sliderCircle, 6)
-            Stroke(sliderCircle, theme.AccentLight, 0.2, 1)
+            Corner(sliderCircle, 7)
+            Stroke(sliderCircle, theme.AccentLight, 0.1, 1)
 
             local function SetValue(nv, fire)
                 value = Clamp(tonumber(nv) or minVal, minVal, maxVal)
@@ -782,28 +781,28 @@ function LiquidUI:CreateWindow(options)
 
         function api:CreateInput(config)
             config = config or {}
-            local card = MakeCard(page, 62)
+            local card = MakeCard(page, 64)
 
-            local text = Label(card, config.Name or "Input", 12, theme.Text, true)
-            text.Position = UDim2.fromOffset(12, 4)
-            text.Size = UDim2.new(1, -24, 0, 18)
+            local text = Label(card, config.Name or "Input", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(14, 6)
+            text.Size = UDim2.new(1, -28, 0, 20)
 
             local box = Create("TextBox", {
-                Position = UDim2.fromOffset(10, 26),
-                Size = UDim2.new(1, -20, 0, 26),
+                Position = UDim2.fromOffset(12, 28),
+                Size = UDim2.new(1, -24, 0, 26),
                 BackgroundColor3 = theme.Background,
                 BorderSizePixel = 0,
                 Text = tostring(config.Default or ""),
                 PlaceholderText = config.Placeholder or "Enter value...",
                 PlaceholderColor3 = theme.SubText,
                 TextColor3 = theme.Text,
-                TextSize = 11,
+                TextSize = 12,
                 Font = Enum.Font.Gotham,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = card
             })
-            Corner(box, 6)
-            Stroke(box, theme.Border, 0.7, 1)
+            Corner(box, 7)
+            Stroke(box, theme.Border, 0.5, 1)
             AddPadding(box, 8, 8, 0, 0)
 
             Connect(box.FocusLost, function(enter)
@@ -813,6 +812,129 @@ function LiquidUI:CreateWindow(options)
             return Handle(card, {
                 GetValue = function() return box.Text end,
                 SetValue = function(_, v) box.Text = tostring(v or "") end
+            })
+        end
+
+        function api:CreateDropdown(config)
+            config = config or {}
+            local values = config.Options or {}
+            local selected = config.Default or "Select an option..."
+            local opened = false
+            local optionConnections = {}
+
+            local card = MakeCard(page, 62)
+            card.ClipsDescendants = false
+            card.ZIndex = 20
+
+            local text = Label(card, config.Name or "Dropdown", 13, theme.Text, true)
+            text.Position = UDim2.fromOffset(14, 6)
+            text.Size = UDim2.new(1, -28, 0, 20)
+
+            local dropButton = Create("TextButton", {
+                Position = UDim2.fromOffset(12, 28),
+                Size = UDim2.new(1, -24, 0, 26),
+                BackgroundColor3 = theme.Background,
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                ZIndex = 21,
+                Parent = card
+            })
+            Corner(dropButton, 7)
+            Stroke(dropButton, theme.Border, 0.5, 1)
+
+            local selectedText = Label(dropButton, selected, 12, theme.SubText, false)
+            selectedText.Position = UDim2.fromOffset(10, 0)
+            selectedText.Size = UDim2.new(1, -30, 1, 0)
+            selectedText.ZIndex = 22
+
+            local arrow = Label(dropButton, "▾", 14, theme.AccentLight, true)
+            arrow.Position = UDim2.new(1, -24, 0, 0)
+            arrow.Size = UDim2.fromOffset(20, 26)
+            arrow.TextXAlignment = Enum.TextXAlignment.Center
+            arrow.ZIndex = 22
+
+            local popup = Create("Frame", {
+                Position = UDim2.new(0, 0, 1, 4),
+                Size = UDim2.new(1, 0, 0, 0),
+                BackgroundColor3 = theme.Surface,
+                BorderSizePixel = 0,
+                Visible = false,
+                ClipsDescendants = true,
+                ZIndex = 50,
+                Parent = dropButton
+            })
+            Corner(popup, 8)
+            Stroke(popup, theme.BorderLight, 0.2, 1)
+
+            local list = Create("ScrollingFrame", {
+                Size = UDim2.fromScale(1, 1),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ScrollBarThickness = 2,
+                ScrollBarImageColor3 = theme.Accent,
+                CanvasSize = UDim2.new(),
+                AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                ZIndex = 51,
+                Parent = popup
+            })
+            AddPadding(list, 4, 4, 4, 4)
+
+            Create("UIListLayout", { Padding = UDim.new(0, 3), Parent = list })
+
+            local function ClearOptions()
+                for _, c in ipairs(optionConnections) do c:Disconnect() end
+                table.clear(optionConnections)
+                for _, child in ipairs(list:GetChildren()) do
+                    if child:IsA("TextButton") then child:Destroy() end
+                end
+            end
+
+            local function Refresh()
+                ClearOptions()
+                for _, option in ipairs(values) do
+                    local optVal = option
+                    local btn = Create("TextButton", {
+                        Size = UDim2.new(1, 0, 0, 28),
+                        BackgroundColor3 = theme.SurfaceLight,
+                        BackgroundTransparency = 0.2,
+                        BorderSizePixel = 0,
+                        Text = tostring(optVal),
+                        TextColor3 = theme.Text,
+                        TextSize = 11,
+                        Font = Enum.Font.Gotham,
+                        AutoButtonColor = false,
+                        ZIndex = 52,
+                        Parent = list
+                    })
+                    Corner(btn, 6)
+                    table.insert(optionConnections, btn.Activated:Connect(function()
+                        selected = optVal
+                        selectedText.Text = tostring(optVal)
+                        opened = false
+                        PlayTween(popup, 0.12, { Size = UDim2.new(1, 0, 0, 0) })
+                        task.delay(0.13, function() popup.Visible = false end)
+                        Callback(config.Callback, optVal)
+                    end))
+                end
+            end
+
+            Refresh()
+
+            Connect(dropButton.Activated, function()
+                opened = not opened
+                if opened then
+                    popup.Visible = true
+                    PlayTween(popup, 0.14, { Size = UDim2.new(1, 0, 0, math.min(#values * 31 + 8, 150)) })
+                else
+                    PlayTween(popup, 0.12, { Size = UDim2.new(1, 0, 0, 0) })
+                    task.delay(0.13, function() if not opened then popup.Visible = false end end)
+                end
+            end)
+
+            return Handle(card, {
+                GetValue = function() return selected end,
+                SetValue = function(_, v) selected = v; selectedText.Text = tostring(v) end
             })
         end
 
@@ -830,10 +952,10 @@ function LiquidUI:CreateWindow(options)
 
         local toast = Create("Frame", {
             AnchorPoint = Vector2.new(1, 1),
-            Position = UDim2.new(1, 300, 1, -20),
-            Size = UDim2.fromOffset(260, 56),
+            Position = UDim2.new(1, 320, 1, -20),
+            Size = UDim2.fromOffset(270, 58),
             BackgroundColor3 = theme.Surface,
-            BackgroundTransparency = 0.05,
+            BackgroundTransparency = 0.04,
             BorderSizePixel = 0,
             ZIndex = 900,
             Parent = gui
@@ -843,11 +965,11 @@ function LiquidUI:CreateWindow(options)
 
         local title = Label(toast, config.Title or "Notice", 12, theme.Text, true)
         title.Position = UDim2.fromOffset(12, 8)
-        title.Size = UDim2.new(1, -20, 0, 16)
+        title.Size = UDim2.new(1, -20, 0, 18)
         title.ZIndex = 901
 
         local body = Label(toast, config.Content or "", 10, theme.SubText, false)
-        body.Position = UDim2.fromOffset(12, 26)
+        body.Position = UDim2.fromOffset(12, 28)
         body.Size = UDim2.new(1, -20, 0, 22)
         body.ZIndex = 901
 
@@ -856,7 +978,7 @@ function LiquidUI:CreateWindow(options)
 
         task.delay(math.max(tonumber(config.Duration) or 3, 1), function()
             if not toast.Parent then return end
-            PlayTween(toast, 0.18, { Position = UDim2.new(1, 300, 1, -20), BackgroundTransparency = 1 })
+            PlayTween(toast, 0.18, { Position = UDim2.new(1, 320, 1, -20), BackgroundTransparency = 1 })
             task.delay(0.2, function()
                 if toast.Parent then toast:Destroy() end
             end)
@@ -920,7 +1042,7 @@ function LiquidUI:CreateWindow(options)
     Connect(resizeGrip.InputBegan, function(input)
         if destroyed or minimized or not IsPointer(input) then return end
         resizing = true
-        resizeBlocker.Visible = true -- Block accidental button/slider taps during resize
+        resizeBlocker.Visible = true
         resizeStart = Vector2.new(input.Position.X, input.Position.Y)
         resizeOrigin = window.AbsoluteSize
     end)
@@ -942,7 +1064,7 @@ function LiquidUI:CreateWindow(options)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             if resizing then
                 resizing = false
-                resizeBlocker.Visible = false -- Re-enable clicks once done resizing
+                resizeBlocker.Visible = false
             end
         end
     end)
@@ -959,7 +1081,7 @@ function LiquidUI:CreateWindow(options)
 
         windowObject:Notify({
             Title = options.Title or "LiquidUI",
-            Content = "System initialized successfully.",
+            Content = "Enterprise modules loaded successfully.",
             Duration = 2.5
         })
     end)
