@@ -1,4 +1,4 @@
-local Library = { Version = "2.0.0" }
+local Library = { Version = "2.1.0" }
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -105,12 +105,34 @@ end
 
 local function InsetY() return GuiService:GetGuiInset().Y end
 
--- Accepts: Color3, HEX ("#28AAC4", "28AAC4", "#2AC"), or a theme / paragraph color name ("Cyan", "Green"...)
+-- Accepts: Color3, HEX ("#28AAC4", "28AAC4", "#2AC", "0xFF8A4C", "#FF8A4CFF"),
+-- "rgb(40,170,196)", { 40, 170, 196 }, or a theme / paragraph color name ("Cyan", "green"...)
 local function ParseColor(V, Fallback)
 	if typeof(V) == "Color3" then return V end
+	if type(V) == "table" and tonumber(V[1]) and tonumber(V[2]) and tonumber(V[3]) then
+		return Color3.fromRGB(math.clamp(V[1], 0, 255), math.clamp(V[2], 0, 255), math.clamp(V[3], 0, 255))
+	end
 	if type(V) == "string" then
 		local Named = Theme[V] or ParagraphColors[V]
+		if typeof(Named) ~= "Color3" then
+			local Lower = V:lower()
+			Named = nil
+			for K, C in pairs(Theme) do
+				if typeof(C) == "Color3" and K:lower() == Lower then Named = C break end
+			end
+			if not Named then
+				for K, C in pairs(ParagraphColors) do
+					if K:lower() == Lower then Named = C break end
+				end
+			end
+		end
 		if typeof(Named) == "Color3" then return Named end
+
+		local R, G, B = V:match("^%s*rgb%s*%(%s*(%d+)%s*,%s*(%d+)%s*,%s*(%d+)%s*%)%s*$")
+		if R then
+			return Color3.fromRGB(math.min(tonumber(R), 255), math.min(tonumber(G), 255), math.min(tonumber(B), 255))
+		end
+
 		local H = V:gsub("%s", "")
 		H = H:gsub("^#", "")
 		H = H:gsub("^0[xX]", "")
@@ -418,7 +440,7 @@ local function MakeParticles(Parent, Count)
 	return L
 end
 
--- Moving purple + cyan glow orbs: used inside every notification and the intro loader.
+-- Moving purple + cyan glow orbs: used inside the Main window, every notification and the intro loader.
 -- Replace them with your own image (rbxthumb / rbxassetid / "0202020" / http):
 --   Library:SetOrbImage("rbxthumb://type=Asset&id=IDHERE&w=768&h=432")   -> both orbs use that image
 --   Library:SetOrbImage({ Purple = "...", Cyan = "..." })                 -> one image per orb
@@ -703,14 +725,17 @@ end
 
 ----------------------------------------------------------------------
 -- Notifications
--- * Compact rounded cards (16px corners, 235px wide, height fits the content), stacked at the BOTTOM of the screen
+-- * Squared rectangle cards: 340 x 120 px (UDim2.fromOffset(340, 120)), 6px corners, stacked at the BOTTOM of the screen
+-- * Fixed size: long text is truncated with "..." instead of making the card taller
 -- * Colorless: same background as the window, with the moving purple/cyan orbs inside
 -- * Follows CreateWindow({ Transparent }) and Library.BackgroundTransparency
 -- * The auto-dismiss timer is a neutral veil that drains away while the text/icon stays visible
 ----------------------------------------------------------------------
 local NotifGui, NotifHolder, NotifList, NotifAnim, NotifSize
-local NotifWidth = 235          -- px; change with Library:SetNotificationWidth(n)
-local NOTIF_RADIUS = 16         -- px (corners are always 1..16 px)
+local NotifWidth = 340          -- px
+local NotifHeight = 120         -- px   -> UDim2.fromOffset(340, 120)
+local NOTIF_RADIUS = 6          -- px   (small radius = squared rectangle look)
+local NOTIF_GAP = 8
 local NotifGlows = {}
 local NotifOrder = 0
 local NotifActive = {}
@@ -724,6 +749,13 @@ local function ApplyNotifLayout()
 	NotifHolder.AnchorPoint = Vector2.new(IsLeft and 0 or 1, 1)
 	NotifHolder.Position = UDim2.new(IsLeft and 0 or 1, IsLeft and NotifMargin or -NotifMargin, 1, -NotifMargin)
 	NotifList.HorizontalAlignment = IsLeft and Enum.HorizontalAlignment.Left or Enum.HorizontalAlignment.Right
+end
+
+-- how many fixed-height cards fit on screen (so a phone screen never overflows)
+local function MaxNotifs()
+	local Cam = workspace.CurrentCamera
+	local H = Cam and Cam.ViewportSize.Y or 720
+	return math.clamp(math.floor((H - NotifMargin * 2) / (NotifHeight + NOTIF_GAP)), 1, 5)
 end
 
 local function EnsureNotif()
@@ -754,7 +786,7 @@ local function EnsureNotif()
 	end)
 	NotifHolder = New("Frame", { Name = "Holder", BackgroundTransparency = 1 }, NotifGui)
 	NotifSize = New("UISizeConstraint", { MaxSize = Vector2.new(NotifWidth, math.huge) }, NotifHolder)
-	NotifList = List(NotifHolder, 8, { VerticalAlignment = Enum.VerticalAlignment.Bottom })
+	NotifList = List(NotifHolder, NOTIF_GAP, { VerticalAlignment = Enum.VerticalAlignment.Bottom })
 	ApplyNotifLayout()
 end
 
@@ -764,10 +796,20 @@ function Library:SetNotificationPosition(Side)
 	ApplyNotifLayout()
 end
 
--- Width of every notification card in px (default 235). Height always fits the content.
+-- Width of every notification in px (default 340)
 function Library:SetNotificationWidth(W)
-	NotifWidth = math.clamp(tonumber(W) or 235, 160, 420)
+	NotifWidth = math.clamp(tonumber(W) or 340, 200, 600)
 	if NotifSize and NotifSize.Parent then NotifSize.MaxSize = Vector2.new(NotifWidth, math.huge) end
+end
+
+-- Height of every notification in px (default 120)
+function Library:SetNotificationHeight(H)
+	NotifHeight = math.clamp(tonumber(H) or 120, 70, 240)
+end
+
+function Library:SetNotificationSize(W, H)
+	Library:SetNotificationWidth(W)
+	Library:SetNotificationHeight(H)
 end
 
 -- Kept for older scripts: true = lift the stack higher from the bottom edge (useful for mobile)
@@ -785,62 +827,60 @@ function Library:Notify(O)
 	local OffX = (NotifSide == "Left" and -1 or 1) * (NotifWidth + 60)
 	NotifOrder += 1
 
-	while #NotifActive >= 5 do
+	while #NotifActive >= MaxNotifs() do
 		local Oldest = table.remove(NotifActive, 1)
 		pcall(Oldest)
 	end
 
+	-- Fixed-size slot: 340 x 120 (width clamps down on very narrow screens)
 	local Holder = New("Frame", {
-		LayoutOrder = NotifOrder, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
+		LayoutOrder = NotifOrder, Size = UDim2.new(1, 0, 0, NotifHeight), BackgroundTransparency = 1,
 	}, NotifHolder)
 
-	-- Compact rounded card (fixed width, height fits the content). Same background recipe as the window:
-	-- Theme.Bg + Transparent + BackgroundTransparency (the outline fades with it too)
+	-- Squared card. Same background recipe as the window: Theme.Bg + Transparent + BackgroundTransparency
 	local Card = New("Frame", {
-		Position = UDim2.fromOffset(OffX, 0), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY,
-		BackgroundColor3 = Theme.Bg, BorderSizePixel = 0,
+		Position = UDim2.fromOffset(OffX, 0), Size = UDim2.fromScale(1, 1), BackgroundColor3 = Theme.Bg, BorderSizePixel = 0,
 	}, Holder)
 	Bg(Card, Library.Transparent and 0.12 or 0)
 	Corner(Card, NOTIF_RADIUS)
 	BgStroke(Stroke(Card, Theme.StrokeHi, 1, 0), Library.Transparent and 0.12 or 0)
 
-	-- CanvasGroup clips the orbs + timer veil to the rounded corners
+	-- CanvasGroup clips the orbs + timer veil to the corners
 	local Glow = New("CanvasGroup", { Name = "Glow", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, Card)
 	Corner(Glow, NOTIF_RADIUS)
-	-- Moving purple + cyan orbs (swappable with an image via Library:SetOrbImage)
-	local OrbA = Orb("Purple", 0.1, 0.15, 140, 0.7, Glow)
-	local OrbB = Orb("Cyan", 0.95, 0.9, 140, 0.7, Glow)
+	local OrbA = Orb("Purple", 0.1, 0.15, 170, 0.7, Glow)
+	local OrbB = Orb("Cyan", 0.95, 0.9, 170, 0.7, Glow)
 	table.insert(NotifGlows, { A = OrbA, B = OrbB, T0 = os.clock(), Seed = math.random() * 6.28 })
 
-	-- Disappearance "bar" merged into the background: neutral veil that drains right to left
+	-- Disappearance veil: drains right to left
 	local Fill = New("Frame", {
 		Name = "TimerFill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 0.9,
 		BorderSizePixel = 0, ZIndex = 1,
 	}, Glow)
 
-	local Body = New("Frame", {
-		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, ZIndex = 3,
-	}, Card)
-	Pad(Body, 14, 12, 32, 12)
+	local Body = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 3 }, Card)
+	Pad(Body, 16, 14, 34, 14)
 	local TextX = 0
 	if O.Icon then
-		IconLabel(Body, O.Icon, 22, Theme.Text, { Position = UDim2.fromOffset(0, 0) }, "•")
-		TextX = 30
+		IconLabel(Body, O.Icon, 24, Theme.Text, { Position = UDim2.fromOffset(0, 0) }, "•")
+		TextX = 36
 	end
+	-- Column is clipped to the card, long text is truncated with "..." instead of growing the card
 	local Column = New("Frame", {
-		Position = UDim2.fromOffset(TextX, 0), Size = UDim2.new(1, -TextX, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(TextX, 0), Size = UDim2.new(1, -TextX, 1, 0), BackgroundTransparency = 1, ClipsDescendants = true,
 	}, Body)
-	List(Column, 3)
+	List(Column, 4)
 	New("TextLabel", {
-		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-		Text = O.Title or "Notification", TextColor3 = White, TextSize = 15, Font = FontBold, TextWrapped = true,
-		TextXAlignment = Left, TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
+		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, RichText = true,
+		Text = O.Title or "Notification", TextColor3 = White, TextSize = 15, Font = FontBold, TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Left, TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
 	}, Column)
 	if O.Content then
 		New("TextLabel", {
-			LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
+			LayoutOrder = 2, Size = UDim2.new(1, 0, 1, -24), BackgroundTransparency = 1, RichText = true,
 			Text = O.Content, TextColor3 = Color3.fromRGB(240, 238, 252), TextSize = 13, Font = FontMed, TextWrapped = true,
-			TextXAlignment = Left, TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
+			TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Left, TextYAlignment = Enum.TextYAlignment.Top,
+			TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
 		}, Column)
 	end
 	New("TextLabel", {
@@ -2242,10 +2282,14 @@ function Window:OpenButton(O)
 end
 Window.EditOpenButton = Window.OpenButton
 
--- Change the main logo (top-left "T" badge) at runtime. Same icon formats as OpenButton.
+-- Change the main logo (top-left badge) at runtime. Same icon formats as OpenButton.
+-- Also updates the loading intro logo if it is still on screen.
 function Window:SetIcon(Icon)
 	if Icon == nil or Icon == "" then return end
 	SetBadgeIcon(self.LogoImg, self.LogoFB, Icon, Theme.OnAccent, 9, UDim2.fromScale(0.6, 0.6))
+	if self.SplashImg and self.SplashImg.Parent then
+		SetBadgeIcon(self.SplashImg, self.SplashFB, Icon, Theme.Text, 18, UDim2.fromScale(0.6, 0.6))
+	end
 end
 
 function Window:SetTitle(T)
@@ -2266,8 +2310,9 @@ end
 -- Tags: shown left -> right in the order they were added (first Window:Tag = first tag).
 -- Layout is computed by the window (Win._layoutTags): fixed spacing between tags, never overlapping,
 -- and when there are too many for the title bar they shrink automatically (icons hide first, then labels truncate).
---   Color = "#FF8A4C"   (HEX, Color3, or a theme name like "Cyan")  -> tint + outline + text
+--   Color = "#FF8A4C"   (HEX, "rgb(255,138,76)", Color3, or a theme name like "Cyan")  -> tint + outline + text
 --   optional: TextColor, BorderColor, BackgroundColor (all HEX-capable), Transparency, Radius
+----------------------------------------------------------------------
 function Window:Tag(O)
 	if type(O) == "string" then O = { Title = O } end
 	O = O or {}
@@ -2725,6 +2770,9 @@ function Library:CreateWindow(O)
 
 	local Background = New("CanvasGroup", { Name = "Background", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, Main)
 	Corner(Background, MAIN_RADIUS)
+	-- Same moving purple + cyan orbs as the notifications / loader (follow Library:SetOrbImage + the moving toggle)
+	local MainOrbA = Orb("Purple", 0.85, 0.15, 300, 0.8, Background)
+	local MainOrbB = Orb("Cyan", 0.15, 0.85, 300, 0.8, Background)
 	local Particles = MakeParticles(Background, 14)
 	Win._applyParticles = function()
 		for _, P in ipairs(Particles) do P.Obj.Visible = Win._particles end
@@ -2940,17 +2988,23 @@ function Library:CreateWindow(O)
 		if I.KeyCode == Win.ToggleKey then Win:Toggle() end
 	end)
 
-	-- "Moving animation" now = tab/page slide + drifting particles. (Nothing else moves any more.)
+	-- "Moving animation" = tab/page slide + drifting particles + the moving orbs in Main.
 	Win._resetMotion = function() end
 
 	local Elapsed, Acc = 0, 0
 	Win:Connect(RunService.RenderStepped, function(Dt)
-		if Win.Destroyed or Win.Hidden or not Win._moving or not Win._particles then return end
+		if Win.Destroyed or Win.Hidden or not Win._moving then return end
 		Elapsed += Dt
 		Acc += Dt
 		if Acc < 1 / 30 then return end
 		local Step = Acc
 		Acc = 0
+
+		-- orbs move even when particles are disabled
+		MainOrbA.Position = UDim2.fromScale(0.85 + math.cos(Elapsed * 0.7) * 0.12, 0.15 + math.sin(Elapsed * 0.55) * 0.15)
+		MainOrbB.Position = UDim2.fromScale(0.15 + math.sin(Elapsed * 0.6) * 0.12, 0.85 + math.cos(Elapsed * 0.5) * 0.15)
+
+		if not Win._particles then return end
 		for _, P in ipairs(Particles) do
 			local Y = P.Y - P.Speed * Step
 			if Y < -0.02 then Y = 1.02 end
@@ -2962,16 +3016,37 @@ function Library:CreateWindow(O)
 
 	Win.ConfigManager = MakeConfigManager(Win)
 
-	if O.ShowIntro == false then
+	-- Loading intro.
+	--   * If the game is already loaded -> shows "Initializing..."; if not -> shows "Wait..." until it is.
+	--   * Always waits a random time between MinTime and MaxTime (default 1.3 - 3s) before continuing.
+	--   * Dots animate (. .. ...) and the text never shifts while they change.
+	--   * The logo is the window Icon (or Loading.Icon).
+	--   * Yield = true (default): CreateWindow waits here, so everything you build after it loads AFTER the intro.
+	-- CreateWindow({ Loading = { Title, Status, WaitStatus, Subtitle, Dots, MinTime, MaxTime, Yield, Icon, Enabled } })
+	Win._IntroDone = false
+	local LoadCfg = type(O.Loading) == "table" and O.Loading or {}
+	if O.ShowIntro == false or LoadCfg.Enabled == false then
 		RootScale.Scale = TargetScale
+		Win._IntroDone = true
 	else
 		Tween(RootScale, 0.35, { Scale = TargetScale }, Enum.EasingStyle.Back)
+
+		local TitleText = string.upper(StripRich(LoadCfg.Title or PlainTitle))
+		local StatusReady = tostring(LoadCfg.Status or "Initializing")
+		local StatusWait = tostring(LoadCfg.WaitStatus or "Wait")
+		local SubText = LoadCfg.Subtitle == nil and "Please wait" or tostring(LoadCfg.Subtitle) -- "" hides it
+		local UseDots = LoadCfg.Dots ~= false
+		local MinT = math.max(tonumber(LoadCfg.MinTime) or 1.3, 0)
+		local MaxT = math.max(tonumber(LoadCfg.MaxTime) or 3, MinT)
+		local Yield = LoadCfg.Yield ~= false
+
 		local Splash = New("CanvasGroup", {
 			Name = "Splash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Theme.Bg, BorderSizePixel = 0, ZIndex = 100, Active = true,
 		}, Main)
 		-- Same background as the window: follows Transparent + BackgroundTransparency
 		Bg(Splash, O.Transparent and 0.12 or 0)
 		Corner(Splash, MAIN_RADIUS)
+
 		-- Moving purple + cyan orbs (swappable with OrbImage / Library:SetOrbImage)
 		local SOrbA = Orb("Purple", 0.92, 0.08, 320, 0.65, Splash)
 		local SOrbB = Orb("Cyan", 0.08, 0.92, 320, 0.65, Splash)
@@ -2986,9 +3061,10 @@ function Library:CreateWindow(O)
 				RunService.RenderStepped:Wait()
 			end
 		end)
-		-- Colorless logo / bar (no accent color)
+
+		-- Colorless logo (connected to the window Icon)
 		local SLogo = New("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -44), Size = UDim2.fromOffset(0, 0),
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -52), Size = UDim2.fromOffset(0, 0),
 			BackgroundColor3 = White, BackgroundTransparency = 0.88, BorderSizePixel = 0, ZIndex = 2,
 		}, Splash)
 		Corner(SLogo, 18)
@@ -3001,34 +3077,82 @@ function Library:CreateWindow(O)
 			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = string.upper(string.sub(PlainTitle, 1, 1)),
 			TextColor3 = Theme.Text, TextSize = 30, Font = FontBlack, ZIndex = 3,
 		}, SLogo)
-		SetBadgeIcon(SImg, SFB, O.Icon or "layout-grid", Theme.Text, 18, UDim2.fromScale(0.6, 0.6))
-		local STitleText = string.upper(PlainTitle)
+		Win.SplashImg, Win.SplashFB = SImg, SFB
+		-- connected to the window Icon (CreateWindow({ Icon = ... })); Loading.Icon overrides it
+		SetBadgeIcon(SImg, SFB, LoadCfg.Icon or O.Icon or "layout-grid", Theme.Text, 18, UDim2.fromScale(0.6, 0.6))
+
 		local STitle = New("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 20), Size = UDim2.fromOffset(400, 32),
-			BackgroundTransparency = 1, Text = STitleText, TextColor3 = Theme.Text, TextSize = 24, Font = FontBlack,
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 14), Size = UDim2.fromOffset(400, 32),
+			BackgroundTransparency = 1, Text = TitleText, TextColor3 = Theme.Text, TextSize = 24, Font = FontBlack,
 			MaxVisibleGraphemes = 0, ZIndex = 2,
 		}, Splash)
+		local StatusLbl = New("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 46), Size = UDim2.fromOffset(400, 20),
+			BackgroundTransparency = 1, RichText = true, Text = "", TextColor3 = Theme.Text, TextSize = 15, Font = FontBold, ZIndex = 2,
+		}, Splash)
 		local BarBg = New("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 64), Size = UDim2.fromOffset(220, 4),
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 72), Size = UDim2.fromOffset(220, 4),
 			BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, ZIndex = 2,
 		}, Splash)
 		Corner(BarBg, 2)
 		local BarFill = New("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Theme.Text, BorderSizePixel = 0 }, BarBg)
 		Corner(BarFill, 2)
+		if SubText ~= "" then
+			New("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 92), Size = UDim2.fromOffset(400, 16),
+				BackgroundTransparency = 1, Text = SubText, TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed, ZIndex = 2,
+			}, Splash)
+		end
+
 		Tween(SLogo, 0.35, { Size = UDim2.fromOffset(72, 72) }, Enum.EasingStyle.Back)
-		Tween(BarFill, 1.4, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
 		task.spawn(function()
-			for I = 1, #STitleText do
+			for I = 1, #TitleText do
 				if Win.Destroyed then return end
 				STitle.MaxVisibleGraphemes = I
 				task.wait(0.03)
 			end
+			STitle.MaxVisibleGraphemes = -1
 		end)
-		task.delay(1.9, function()
+
+		-- "Initializing" + animated dots; the unused dots are invisible so the text stays centered
+		local function DotsText(Base, N)
+			if not UseDots then return Base end
+			return Base .. string.rep(".", N) .. "<font transparency=\"1\">" .. string.rep(".", 3 - N) .. "</font>"
+		end
+
+		local function Finish()
+			if Win.Destroyed then return end
+			BarFill.Size = UDim2.fromScale(1, 1)
+			task.wait(0.15)
 			if Win.Destroyed then return end
 			Tween(Splash, 0.3, { GroupTransparency = 1 })
-			task.delay(0.35, function() pcall(function() Splash:Destroy() end) end)
-		end)
+			task.wait(0.32)
+			pcall(function() Splash:Destroy() end)
+			Win._IntroDone = true
+		end
+
+		local function Run()
+			local T0 = os.clock()
+			local Need = Rng:NextNumber(MinT, MaxT)
+			local LastKey
+			while not Win.Destroyed do
+				local Loaded = game:IsLoaded()
+				local El = os.clock() - T0
+				local Phase = math.floor(El / 0.35) % 4
+				local Key = (Loaded and 10 or 0) + Phase
+				if Key ~= LastKey then
+					LastKey = Key
+					StatusLbl.Text = DotsText(Loaded and StatusReady or StatusWait, Phase)
+				end
+				-- bar stalls at 90% while the game is still loading
+				BarFill.Size = UDim2.fromScale(math.min(El / math.max(Need, 0.01), Loaded and 1 or 0.9), 1)
+				if Loaded and El >= Need then break end
+				RunService.Heartbeat:Wait()
+			end
+			Finish()
+		end
+
+		if Yield then Run() else task.spawn(Run) end
 	end
 
 	if type(O.KeySystem) == "table" then
