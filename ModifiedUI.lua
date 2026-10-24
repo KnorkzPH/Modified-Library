@@ -1,4 +1,4 @@
-local Library = { Version = "1.2.0" }
+local Library = { Version = "1.3.0" }
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -864,6 +864,7 @@ function Elements:Dropdown(O)
 	local Values = O.Values or {}
 	local C = self:_Card(O, 150)
 	local Obj = { Value = Multi and {} or nil, Values = Values }
+	local Open = false
 
 	local Pill = New("TextButton", {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(140, 26),
@@ -877,12 +878,23 @@ function Elements:Dropdown(O)
 	}, Pill)
 	local Chevron = IconLabel(Pill, "chevron-down", 14, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0) }, "v")
 
+	Pill.MouseEnter:Connect(function()
+		if Open then return end
+		Tween(PillStroke, 0.15, { Color = Theme.Violet })
+		Tween(Pill, 0.15, { BackgroundColor3 = Theme.CardHover })
+	end)
+	Pill.MouseLeave:Connect(function()
+		if Open then return end
+		Tween(PillStroke, 0.15, { Color = Theme.Stroke })
+		Tween(Pill, 0.15, { BackgroundColor3 = Theme.Bg2 })
+	end)
+
 	local Holder = New("Frame", {
 		LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, ClipsDescendants = true, Visible = false,
 		Active = true,
 	}, C.Card)
 	Corner(Holder, 8)
-	Stroke(Holder, Theme.Stroke, 1)
+	Stroke(Holder, Theme.Violet, 1, 0.55)
 	local Scroll = New("ScrollingFrame", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2,
 		ScrollBarImageColor3 = Theme.Violet, CanvasSize = UDim2.new(), AutomaticCanvasSize = AutoY,
@@ -892,9 +904,8 @@ function Elements:Dropdown(O)
 	List(Scroll, 2)
 
 	local Buttons = {}
-	local Open = false
 	local ContentH = 0
-	local function Height() return math.min(math.max(ContentH, 30), 150) + 8 end
+	local function Height() return math.min(math.max(ContentH, 32), 160) + 8 end
 
 	local function NameOf(Item)
 		if Item == nil then return nil end
@@ -903,6 +914,21 @@ function Elements:Dropdown(O)
 			return tostring(Item.Title)
 		end
 		return tostring(Item)
+	end
+
+	local function Paint(B)
+		local T
+		if B.Locked then
+			T = 1
+		elseif B.Down then
+			T = 0.5
+		elseif B.On then
+			T = B.Hover and 0.6 or 0.74
+		else
+			T = B.Hover and 0.8 or 1
+		end
+		Tween(B.Btn, 0.12, { BackgroundTransparency = T })
+		B.Accent.Visible = B.On and not B.Locked
 	end
 
 	local function SetOpen(Val)
@@ -919,6 +945,7 @@ function Elements:Dropdown(O)
 		end
 		Tween(Chevron, 0.2, { Rotation = Val and 180 or 0 })
 		Tween(PillStroke, 0.2, { Color = Val and Theme.Violet or Theme.Stroke })
+		Tween(Pill, 0.2, { BackgroundColor3 = Val and Theme.CardHover or Theme.Bg2 })
 	end
 
 	local function Render()
@@ -930,8 +957,17 @@ function Elements:Dropdown(O)
 		for Name, B in pairs(Buttons) do
 			local On
 			if Multi then On = table.find(Obj.Value, Name) ~= nil else On = Obj.Value == Name end
+			B.On = On
 			B.Chk.Visible = On
-			B.Lbl.TextColor3 = (B.Locked and Theme.Stroke) or (On and Theme.Text or Theme.Muted)
+			if B.ChkFB then B.ChkFB.Visible = On and B.Chk.Image == "" end
+			if B.Locked then
+				B.Lbl.TextColor3 = Theme.Muted
+				B.Lbl.TextTransparency = 0.45
+			else
+				B.Lbl.TextColor3 = On and Theme.Text or Theme.Muted
+				B.Lbl.Font = On and FontBold or FontMed
+			end
+			Paint(B)
 		end
 	end
 
@@ -964,6 +1000,14 @@ function Elements:Dropdown(O)
 		end
 		Buttons = {}
 		ContentH = 0
+		if #Values == 0 then
+			New("TextLabel", {
+				LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = O.EmptyText or "No options",
+				TextColor3 = Theme.Muted, TextSize = 11, Font = FontMed,
+			}, Scroll)
+			ContentH = 32
+			return
+		end
 		for I, Raw in ipairs(Values) do
 			if type(Raw) == "table" and Raw.Type == "Divider" then
 				local Div = New("Frame", { LayoutOrder = I, Size = UDim2.new(1, 0, 0, 7), BackgroundTransparency = 1 }, Scroll)
@@ -975,28 +1019,72 @@ function Elements:Dropdown(O)
 			else
 				local Name = NameOf(Raw) or tostring(Raw)
 				local ItemLocked = type(Raw) == "table" and Raw.Locked == true
+				local LockText = "Locked"
+				if ItemLocked then
+					local T = Raw.LockTitle
+					if T == nil then T = Raw.LockedTitle end
+					if T ~= nil then LockText = tostring(T) end
+				end
+
 				local Btn = New("TextButton", {
-					LayoutOrder = I, Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = Theme.CardHover, BackgroundTransparency = 1,
-					BorderSizePixel = 0, AutoButtonColor = false, Text = "",
+					LayoutOrder = I, Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = Theme.Violet, BackgroundTransparency = 1,
+					BorderSizePixel = 0, AutoButtonColor = false, Text = "", ClipsDescendants = true,
 				}, Scroll)
 				Corner(Btn, 6)
-				local TX = 10
+				local Accent = New("Frame", {
+					AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(3, 16),
+					BackgroundColor3 = Theme.Cyan, BorderSizePixel = 0, Visible = false,
+				}, Btn)
+				Corner(Accent, 2)
+				local Row = New("Frame", {
+					Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -38, 1, 0), BackgroundTransparency = 1,
+				}, Btn)
+				List(Row, 6, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
 				if type(Raw) == "table" and Raw.Icon then
-					IconLabel(Btn, Raw.Icon, 14, Theme.Violet, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0) })
-					TX = 32
+					local Wrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1 }, Row)
+					IconLabel(Wrap, Raw.Icon, 14, Theme.Violet, { Position = UDim2.fromOffset(0, 0) })
 				end
 				local Lbl = New("TextLabel", {
-					Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -(TX + 24), 1, 0), BackgroundTransparency = 1, Text = Name,
-					TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed, TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
-				}, Btn)
-				local Chk = New("TextLabel", {
-					AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(14, 14),
-					BackgroundTransparency = 1, Text = "•", TextColor3 = Theme.Violet, TextSize = 20, Font = FontBold, Visible = false,
-				}, Btn)
+					LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = AutoX, BackgroundTransparency = 1, Text = Name,
+					TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed,
+				}, Row)
+				if ItemLocked then
+					local LockWrap = New("Frame", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 28), AutomaticSize = AutoX, BackgroundTransparency = 1 }, Row)
+					List(LockWrap, 4, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
+					local IconWrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1 }, LockWrap)
+					IconLabel(IconWrap, "lock", 12, Theme.Amber, { Position = UDim2.fromOffset(0, 0) }, "•")
+					if LockText ~= "" then
+						New("TextLabel", {
+							LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = AutoX, BackgroundTransparency = 1, Text = LockText,
+							TextColor3 = Theme.Amber, TextSize = 10, Font = FontBold,
+						}, LockWrap)
+					end
+				end
+				local Chk, ChkFB = IconLabel(Btn, "check", 14, Theme.Cyan, {
+					AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Visible = false,
+				}, "✓")
+
+				local B = {
+					Btn = Btn, Lbl = Lbl, Chk = Chk, ChkFB = ChkFB, Accent = Accent, Locked = ItemLocked,
+					On = false, Hover = false, Down = false,
+				}
 				Btn.MouseEnter:Connect(function()
-					if not ItemLocked then Tween(Btn, 0.1, { BackgroundTransparency = 0.4 }) end
+					B.Hover = true
+					Paint(B)
 				end)
-				Btn.MouseLeave:Connect(function() Tween(Btn, 0.1, { BackgroundTransparency = 1 }) end)
+				Btn.MouseLeave:Connect(function()
+					B.Hover = false
+					B.Down = false
+					Paint(B)
+				end)
+				Btn.MouseButton1Down:Connect(function()
+					B.Down = true
+					Paint(B)
+				end)
+				Btn.MouseButton1Up:Connect(function()
+					B.Down = false
+					Paint(B)
+				end)
 				Btn.MouseButton1Click:Connect(function()
 					if ItemLocked then return end
 					if type(Raw) == "table" then Call(Raw.Callback) end
@@ -1010,8 +1098,8 @@ function Elements:Dropdown(O)
 						SetOpen(false)
 					end
 				end)
-				Buttons[Name] = { Btn = Btn, Lbl = Lbl, Chk = Chk, Locked = ItemLocked }
-				ContentH += 30
+				Buttons[Name] = B
+				ContentH += 32
 			end
 		end
 	end
@@ -1463,7 +1551,10 @@ end
 function Window:_MakeTab(O, ParentFrame)
 	if type(O) == "string" then O = { Title = O } end
 	O = O or {}
-	local Tab = setmetatable({ Win = self, _n = 0, Title = O.Title or "Tab", Locked = false }, TabClass)
+	local WinRef = self
+	local LockTitle = "Locked"
+	if O.LockTitle ~= nil then LockTitle = tostring(O.LockTitle) elseif O.LockedTitle ~= nil then LockTitle = tostring(O.LockedTitle) end
+	local Tab = setmetatable({ Win = self, _n = 0, Title = O.Title or "Tab", Locked = false, LockTitle = LockTitle }, TabClass)
 
 	local Btn = New("TextButton", {
 		LayoutOrder = self:_NextSide(), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -1525,7 +1616,7 @@ function Window:_MakeTab(O, ParentFrame)
 		if Ico then Tween(Ico, 0.2, { ImageColor3 = On and Theme.Violet or Theme.Muted }) end
 		if On then
 			Page.Visible = true
-			if not Instant then
+			if not Instant and WinRef._moving ~= false then
 				Page.Position = UDim2.fromOffset(0, 12)
 				Tween(Page, 0.3, { Position = UDim2.fromOffset(0, 0) })
 			end
@@ -1533,8 +1624,9 @@ function Window:_MakeTab(O, ParentFrame)
 			Page.Visible = false
 		end
 	end
-	function Tab:Lock()
+	function Tab:Lock(Title)
 		Tab.Locked = true
+		if Title ~= nil then Tab.LockTitle = tostring(Title) end
 		Lbl.TextTransparency = 0.5
 		if IconRight then ShowIcon(Ico, IcoFB, false) end
 		ShowIcon(LockIco, LockFB, true)
@@ -1551,6 +1643,7 @@ function Window:_MakeTab(O, ParentFrame)
 		Tab.Title = T
 		Lbl.Text = T
 	end
+	function Tab:SetLockTitle(T) Tab.LockTitle = tostring(T or "") end
 	function Tab:Destroy()
 		local I = table.find(self.Win.Tabs, Tab)
 		if I then table.remove(self.Win.Tabs, I) end
@@ -1574,7 +1667,15 @@ function Window:_MakeTab(O, ParentFrame)
 			Tween(ActiveFill, 0.15, { BackgroundTransparency = 1 })
 		end
 	end)
-	Btn.MouseButton1Click:Connect(function() Tab:Select() end)
+	Btn.MouseButton1Click:Connect(function()
+		if Tab.Locked then
+			Library:Notify({
+				Title = Tab.Title, Content = Tab.LockTitle ~= "" and Tab.LockTitle or "Locked", Icon = "lock", Type = "warn", Duration = 2.5,
+			})
+			return
+		end
+		Tab:Select()
+	end)
 
 	table.insert(self.Tabs, Tab)
 	if not self.CurrentTab and not Tab.Locked then Tab:Select(true) end
@@ -1733,6 +1834,24 @@ function Window:LoadConfig(Name)
 	return Cfg:Load()
 end
 
+function Window:DeleteConfig(Name)
+	return self.ConfigManager:DeleteConfig(Name)
+end
+
+function Window:GetConfigs()
+	return self.ConfigManager:AllConfigs()
+end
+
+function Window:SetMovingAnimation(V)
+	self._moving = V ~= false
+	if not self._moving and self._resetMotion then self._resetMotion() end
+end
+
+function Window:SetParticles(V)
+	self._particles = V ~= false
+	if self._applyParticles then self._applyParticles() end
+end
+
 function Window:Destroy()
 	if self.Destroyed then return end
 	self.Destroyed = true
@@ -1746,6 +1865,8 @@ end
 local function MakeConfigManager(Win)
 	local CM = { Configs = {} }
 	local Dir = "ToolkitUI/" .. Win.Folder .. "/config"
+	local HasList = type(listfiles) == "function" and type(isfile) == "function"
+	local CanWrite = type(writefile) == "function" and type(readfile) == "function"
 
 	local function Ensure()
 		pcall(function()
@@ -1757,27 +1878,64 @@ local function MakeConfigManager(Win)
 		end)
 	end
 
+	function CM:Sanitize(Name)
+		Name = tostring(Name or ""):gsub("[^%w%-_ ]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+		return Name:sub(1, 32)
+	end
+
+	function CM:ConfigPath(Name)
+		return Dir .. "/" .. Name .. ".json"
+	end
+
+	function CM:ConfigExists(Name)
+		Name = CM:Sanitize(Name)
+		if Name == "" then return false end
+		if HasList then
+			local Ok, R = pcall(isfile, CM:ConfigPath(Name))
+			return Ok and R == true
+		end
+		return CM.Configs[Name] ~= nil
+	end
+
 	function CM:CreateConfig(Name)
-		local Cfg = { Name = Name, Registered = {} }
-		local Path = Dir .. "/" .. Name .. ".json"
+		Name = CM:Sanitize(Name)
+		if Name == "" then Name = "default" end
+		if CM.Configs[Name] then return CM.Configs[Name] end
+
+		local Cfg = { Name = Name, Registered = {}, Memory = nil }
+		local Path = CM:ConfigPath(Name)
+
 		function Cfg:Register(Key, Element) Cfg.Registered[Key] = Element end
+
 		local function All()
 			local T = {}
 			for K, E in pairs(Win.FlagElements) do T[K] = E end
 			for K, E in pairs(Cfg.Registered) do T[K] = E end
 			return T
 		end
+
 		function Cfg:Save()
-			Ensure()
 			local Data = {}
 			for K, E in pairs(All()) do
 				if E.Value ~= nil then Data[K] = Ser(E.Value) end
 			end
+			if not CanWrite then
+				Cfg.Memory = Data
+				return true
+			end
+			Ensure()
 			return (pcall(function() writefile(Path, HttpService:JSONEncode(Data)) end))
 		end
+
 		function Cfg:Load()
-			local Ok, Data = pcall(function() return HttpService:JSONDecode(readfile(Path)) end)
-			if not Ok or type(Data) ~= "table" then return false end
+			local Data
+			if CanWrite then
+				local Ok, Result = pcall(function() return HttpService:JSONDecode(readfile(Path)) end)
+				if Ok then Data = Result end
+			else
+				Data = Cfg.Memory
+			end
+			if type(Data) ~= "table" then return false end
 			local Els = All()
 			for K, V in pairs(Data) do
 				local E = Els[K]
@@ -1785,21 +1943,48 @@ local function MakeConfigManager(Win)
 			end
 			return true
 		end
-		function Cfg:Delete() pcall(function() if delfile then delfile(Path) end end) end
+
+		function Cfg:Exists() return CM:ConfigExists(Name) end
+		function Cfg:Delete() return CM:DeleteConfig(Name) end
+
 		CM.Configs[Name] = Cfg
 		return Cfg
 	end
 
-	function CM:AllConfigs()
-		local L = {}
+	function CM:GetConfig(Name)
+		return CM.Configs[CM:Sanitize(Name)]
+	end
+
+	function CM:DeleteConfig(Name)
+		Name = CM:Sanitize(Name)
+		if Name == "" then return false end
+		local Path = CM:ConfigPath(Name)
 		pcall(function()
-			for _, F in ipairs(listfiles(Dir)) do
-				local N = F:match("([^/\\]+)%.json$")
-				if N then table.insert(L, N) end
-			end
+			if delfile and isfile and isfile(Path) then delfile(Path) end
 		end)
+		CM.Configs[Name] = nil
+		return not CM:ConfigExists(Name)
+	end
+
+	function CM:AllConfigs()
+		local L, Seen = {}, {}
+		if HasList then
+			pcall(function()
+				for _, F in ipairs(listfiles(Dir)) do
+					local N = F:match("([^/\\]+)%.json$")
+					if N and not Seen[N] then
+						Seen[N] = true
+						table.insert(L, N)
+					end
+				end
+			end)
+		else
+			for N in pairs(CM.Configs) do table.insert(L, N) end
+		end
+		table.sort(L, function(A, B) return A:lower() < B:lower() end)
 		return L
 	end
+
 	return CM
 end
 
@@ -1941,6 +2126,7 @@ function Library:CreateWindow(O)
 	local Win = setmetatable({
 		Connections = {}, Tabs = {}, Destroyed = false, Hidden = false, _side = 0, _Elements = {}, FlagElements = {},
 		Folder = FolderName, ToggleKey = O.ToggleKey or Enum.KeyCode.RightShift, _openButton = true,
+		_moving = O.MovingAnimation ~= false, _particles = O.Particles ~= false,
 	}, Window)
 
 	pcall(function()
@@ -2003,6 +2189,10 @@ function Library:CreateWindow(O)
 	local Orb1 = Orb(Theme.Violet, 0.12, 0.1, 340, 0.72, Background)
 	local Orb2 = Orb(Theme.Cyan, 0.95, 0.95, 320, 0.72, Background)
 	local Particles = MakeParticles(Background, 14)
+	Win._applyParticles = function()
+		for _, P in ipairs(Particles) do P.Obj.Visible = Win._particles end
+	end
+	Win._applyParticles()
 
 	local TopBar = New("Frame", { Name = "TopBar", Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 1, ZIndex = 5 }, Main)
 	local Logo = New("Frame", {
@@ -2146,9 +2336,17 @@ function Library:CreateWindow(O)
 		if I.KeyCode == Win.ToggleKey then Win:Toggle() end
 	end)
 
+	Win._resetMotion = function()
+		BorderGrad.Rotation = 0
+		LogoGrad.Rotation = 45
+		Orb1.Position = UDim2.fromScale(0.12, 0.1)
+		Orb2.Position = UDim2.fromScale(0.95, 0.95)
+	end
+	if not Win._moving then Win._resetMotion() end
+
 	local Elapsed, Acc = 0, 0
 	Win:Connect(RunService.RenderStepped, function(Dt)
-		if Win.Destroyed or Win.Hidden then return end
+		if Win.Destroyed or Win.Hidden or not Win._moving then return end
 		Elapsed += Dt
 		BorderGrad.Rotation = (Elapsed * 45) % 360
 		LogoGrad.Rotation = (Elapsed * 60) % 360
@@ -2158,12 +2356,14 @@ function Library:CreateWindow(O)
 		Acc = 0
 		Orb1.Position = UDim2.fromScale(0.12 + math.sin(Elapsed * 0.5) * 0.07, 0.1 + math.cos(Elapsed * 0.4) * 0.06)
 		Orb2.Position = UDim2.fromScale(0.95 + math.cos(Elapsed * 0.45) * 0.07, 0.95 + math.sin(Elapsed * 0.35) * 0.06)
-		for _, P in ipairs(Particles) do
-			local Y = P.Y - P.Speed * Step
-			if Y < -0.02 then Y = 1.02 end
-			local X = P.X + math.sin(Elapsed + P.Drift) * 0.018 * Step
-			P.X, P.Y = X, Y
-			P.Obj.Position = UDim2.fromScale(X, Y)
+		if Win._particles then
+			for _, P in ipairs(Particles) do
+				local Y = P.Y - P.Speed * Step
+				if Y < -0.02 then Y = 1.02 end
+				local X = P.X + math.sin(Elapsed + P.Drift) * 0.018 * Step
+				P.X, P.Y = X, Y
+				P.Obj.Position = UDim2.fromScale(X, Y)
+			end
 		end
 	end)
 
