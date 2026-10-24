@@ -1,3 +1,22 @@
+--[[
+    ToolkitUI  •  WindUI-compatible API  (v1.1.0)
+
+    local Toolkit = loadstring(game:HttpGet("..."))()
+
+    Toolkit:CreateWindow({ Title, Author, Icon, Size, SideBarWidth, Folder, ToggleKey, ShowIntro, Transparent, User, KeySystem })
+    Window:Tab({ Title, Icon, Locked })           Window:Section({ Title, Icon, Opened })  -> Section:Tab({...})
+    Window:Tag / Dialog / Notify / Divider / Space / SelectTab / Destroy
+
+    Tab:Toggle / Button / Slider / Dropdown / Input / Keybind / Colorpicker / Paragraph / Code / Section / Divider / Space
+    Every element accepts:  Locked = true,  LockTitle = "Text shown on the lock overlay"
+
+    Toolkit:Notify({ Title, Content, Duration, Icon })
+    Toolkit:Popup({ Title, Content, Icon, Buttons })
+
+    Icons (SetLucide):  "bird" (lucide)  |  "lucide:bird"  |  "solar:home-2-bold"  |  "rbxassetid://123"
+    Custom icons:       Toolkit.Creator.AddIcons("solar", { name = "rbxassetid://..." })
+]]
+
 local Library = { Version = "1.1.0" }
 
 local Players = game:GetService("Players")
@@ -1529,7 +1548,7 @@ function Window:_MakeTab(O, ParentFrame)
 	Pad(Page, 3, 3, 12, 3)
 	List(Page, 8)
 
-	Tab.Parent, Tab.Page, Tab.Button = Page, Page, Btn
+	Tab.Parent, Tab.Page, Tab.TabButton = Page, Page, Btn -- NOTE: never name a field "Button": it would shadow Tab:Button()
 
 	local Selected = false
 	function Tab:_SetActive(On, Instant)
@@ -2270,4 +2289,3 @@ function Library:CreateWindow(O)
 end
 
 return Library
-
