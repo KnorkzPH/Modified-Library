@@ -144,6 +144,8 @@ end
 -- Tags are intentionally NOT registered, so they never change.
 ----------------------------------------------------------------------
 Library.BackgroundTransparency = 0
+Library.Transparent = false   -- mirrors CreateWindow({ Transparent = true }); notifications + loader follow it
+Library.Moving = true         -- mirrors the window's moving animation; notifications + loader follow it
 local BgRegistry = {}
 
 local function BgCalc(Base)
@@ -405,6 +407,73 @@ local function MakeParticles(Parent, Count)
 	return L
 end
 
+-- Moving purple + cyan glow orbs: used inside every notification and the intro loader.
+-- Replace them with your own image (rbxthumb / rbxassetid / "0202020" / http):
+--   Library:SetOrbImage("rbxthumb://type=Asset&id=IDHERE&w=768&h=432")   -> both orbs use that image
+--   Library:SetOrbImage({ Purple = "...", Cyan = "..." })                 -> one image per orb
+--   Library:SetOrbImage(img, 0.5)                                         -> 2nd arg = image transparency
+--   Library:SetOrbImage(nil)                                              -> back to the default purple/cyan glow
+-- Also: CreateWindow({ OrbImage = ..., OrbImageTransparency = ... }) and Window:SetOrbImage(...)
+local OrbDefaultImage = "rbxassetid://6014261993"
+local OrbPurple = Color3.fromRGB(139, 92, 255)
+local OrbRegistry = {}
+Library.OrbImages = {}
+Library.OrbImageTransparency = nil
+
+local function StyleOrb(E)
+	local Obj = E.Obj
+	if not Obj or not Obj.Parent then return end
+	local Kind, Val
+	local Src = Library.OrbImages[E.Key]
+	if Src then Kind, Val = ParseIcon(Src) end
+	if Kind == "asset" then
+		Obj.Image = Val
+		Obj.ImageColor3 = White
+		Obj.ScaleType = Enum.ScaleType.Fit
+		Obj.ImageRectSize = Vector2.new(0, 0)
+		Obj.ImageRectOffset = Vector2.new(0, 0)
+		Obj.ImageTransparency = Library.OrbImageTransparency or E.Transparency
+	else
+		Obj.Image = OrbDefaultImage
+		Obj.ImageColor3 = E.Color
+		Obj.ScaleType = Enum.ScaleType.Slice
+		Obj.SliceCenter = Rect.new(49, 49, 450, 450)
+		Obj.ImageTransparency = E.Transparency
+	end
+end
+
+local function PruneOrbs()
+	for I = #OrbRegistry, 1, -1 do
+		if OrbRegistry[I].Obj.Parent == nil then table.remove(OrbRegistry, I) end
+	end
+end
+
+function Library:SetOrbImage(Img, Transparency)
+	if type(Img) == "table" then
+		Library.OrbImages = { Purple = Img.Purple or Img.Violet or Img[1], Cyan = Img.Cyan or Img[2] }
+	elseif Img == nil or Img == "" then
+		Library.OrbImages = {}
+	else
+		Library.OrbImages = { Purple = Img, Cyan = Img }
+	end
+	if type(Transparency) == "number" then Library.OrbImageTransparency = math.clamp(Transparency, 0, 1) end
+	PruneOrbs()
+	for _, E in ipairs(OrbRegistry) do StyleOrb(E) end
+end
+
+-- Key = "Purple" or "Cyan"
+local function Orb(Key, X, Y, Size, Transparency, Parent)
+	local Obj = New("ImageLabel", {
+		BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(X, Y),
+		Size = UDim2.fromOffset(Size, Size), ZIndex = 1,
+	}, Parent)
+	local E = { Obj = Obj, Key = Key, Color = Key == "Cyan" and Theme.Cyan or OrbPurple, Transparency = Transparency }
+	table.insert(OrbRegistry, E)
+	if #OrbRegistry % 60 == 0 then PruneOrbs() end
+	StyleOrb(E)
+	return Obj
+end
+
 local function Ser(V)
 	if typeof(V) == "Color3" then return { __c = { V.R, V.G, V.B } } end
 	if typeof(V) == "EnumItem" then return V.Name end
@@ -624,11 +693,12 @@ end
 ----------------------------------------------------------------------
 -- Notifications
 -- * Square corners, stacked at the BOTTOM of the screen (bottom-right by default)
--- * The auto-dismiss timer is merged into the card: the colored background
---   slowly drains away while the text/icon on top stays fully visible
--- * Large, high-contrast text and follows Library.BackgroundTransparency
+-- * Colorless: same background as the window, with the moving purple/cyan orbs inside
+-- * Follows CreateWindow({ Transparent }) and Library.BackgroundTransparency
+-- * The auto-dismiss timer is a neutral veil that drains away while the text/icon stays visible
 ----------------------------------------------------------------------
-local NotifGui, NotifHolder, NotifList
+local NotifGui, NotifHolder, NotifList, NotifAnim
+local NotifGlows = {}
 local NotifOrder = 0
 local NotifActive = {}
 local NotifMargin = 16
@@ -650,6 +720,25 @@ local function EnsureNotif()
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	})
 	ParentGui(NotifGui)
+	if NotifAnim then pcall(function() NotifAnim:Disconnect() end) end
+	local Acc = 0
+	NotifAnim = RunService.RenderStepped:Connect(function(Dt)
+		Acc += Dt
+		if Acc < 1 / 30 then return end
+		Acc = 0
+		if not (NotifGui and NotifGui.Parent) then return end
+		local Now = os.clock()
+		for I = #NotifGlows, 1, -1 do
+			local G = NotifGlows[I]
+			if not G.A.Parent then
+				table.remove(NotifGlows, I)
+			elseif Library.Moving then
+				local T = Now - G.T0 + G.Seed
+				G.A.Position = UDim2.fromScale(0.1 + math.sin(T * 0.9) * 0.1, 0.15 + math.cos(T * 0.7) * 0.2)
+				G.B.Position = UDim2.fromScale(0.95 + math.cos(T * 0.8) * 0.1, 0.9 + math.sin(T * 0.6) * 0.2)
+			end
+		end
+	end)
 	NotifHolder = New("Frame", { Name = "Holder", BackgroundTransparency = 1 }, NotifGui)
 	New("UISizeConstraint", { MaxSize = Vector2.new(380, math.huge) }, NotifHolder)
 	NotifList = List(NotifHolder, 8, { VerticalAlignment = Enum.VerticalAlignment.Bottom })
@@ -672,7 +761,7 @@ function Library:Notify(O)
 	if type(O) == "string" then O = { Content = O } end
 	O = O or {}
 	EnsureNotif()
-	local Col = ParseColor(O.Color, nil) or (O.Type and TypeColors[string.lower(tostring(O.Type))]) or Theme.Accent
+	-- Colorless on purpose: no per-type tint (O.Color / O.Type are ignored). The look follows the window.
 	local Dur = math.max(tonumber(O.Duration) or 4, 0.5)
 	local OffX = (NotifSide == "Left" and -1 or 1) * 440
 	NotifOrder += 1
@@ -686,29 +775,33 @@ function Library:Notify(O)
 		LayoutOrder = NotifOrder, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
 	}, NotifHolder)
 
-	-- Square card (no UICorner on purpose)
+	-- Square card, same background recipe as the window (Theme.Bg + Transparent + BackgroundTransparency)
 	local Card = New("Frame", {
 		Position = UDim2.fromOffset(OffX, 0), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY,
-		BackgroundColor3 = Theme.NotifBg, BorderSizePixel = 0, ClipsDescendants = true,
+		BackgroundColor3 = Theme.Bg, BorderSizePixel = 0, ClipsDescendants = true,
 	}, Holder)
-	Bg(Card, 0.02)
-	Stroke(Card, Col, 2, 0)
+	Bg(Card, Library.Transparent and 0.12 or 0)
+	Stroke(Card, Theme.StrokeHi, 1.5, 0)
 
-	-- Disappearance "bar" merged into the background: it drains from right to left behind the content
+	-- Moving purple + cyan orbs inside the card (swappable with an image via Library:SetOrbImage)
+	local Glow = New("Frame", { Name = "Glow", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 1 }, Card)
+	local OrbA = Orb("Purple", 0.1, 0.15, 190, 0.7, Glow)
+	local OrbB = Orb("Cyan", 0.95, 0.9, 190, 0.7, Glow)
+	table.insert(NotifGlows, { A = OrbA, B = OrbB, T0 = os.clock(), Seed = math.random() * 6.28 })
+
+	-- Disappearance "bar" merged into the background: neutral veil that drains right to left
 	local Fill = New("Frame", {
-		Name = "TimerFill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Col, BackgroundTransparency = 0.72,
+		Name = "TimerFill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 0.9,
 		BorderSizePixel = 0, ZIndex = 1,
 	}, Card)
-	-- Solid accent stripe (does not shrink, so the type color is always visible)
-	New("Frame", { Name = "Accent", Size = UDim2.new(0, 5, 1, 0), BackgroundColor3 = Col, BorderSizePixel = 0, ZIndex = 2 }, Card)
 
 	local Body = New("Frame", {
 		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, ZIndex = 3,
 	}, Card)
-	Pad(Body, 20, 12, 38, 12)
+	Pad(Body, 16, 12, 38, 12)
 	local TextX = 0
 	if O.Icon then
-		IconLabel(Body, O.Icon, 24, Col, { Position = UDim2.fromOffset(0, 0) }, "•")
+		IconLabel(Body, O.Icon, 24, Theme.Text, { Position = UDim2.fromOffset(0, 0) }, "•")
 		TextX = 34
 	end
 	local Column = New("Frame", {
@@ -2276,7 +2369,12 @@ end
 
 function Window:SetMovingAnimation(V)
 	self._moving = V ~= false
+	Library.Moving = self._moving
 	if not self._moving and self._resetMotion then self._resetMotion() end
+end
+
+function Window:SetOrbImage(Img, Transparency)
+	Library:SetOrbImage(Img, Transparency)
 end
 
 function Window:SetParticles(V)
@@ -2547,6 +2645,12 @@ end
 
 function Library:CreateWindow(O)
 	O = O or {}
+
+	-- Notifications + loader copy these from the window
+	Library.Transparent = O.Transparent and true or false
+	Library.Moving = O.MovingAnimation ~= false
+	-- Optional: OrbImage = "rbxthumb://type=Asset&id=ID&w=768&h=432" (or { Purple = ..., Cyan = ... }), OrbImageTransparency = 0..1
+	if O.OrbImage ~= nil then Library:SetOrbImage(O.OrbImage, O.OrbImageTransparency) end
 
 	-- Optional: BackgroundTransparency = 0..1 (applies to window, cards, dialogs, notifications; never to Tags)
 	if type(O.BackgroundTransparency) == "number" then
@@ -2857,21 +2961,39 @@ function Library:CreateWindow(O)
 		local Splash = New("CanvasGroup", {
 			Name = "Splash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Theme.Bg, BorderSizePixel = 0, ZIndex = 100, Active = true,
 		}, Main)
+		-- Same background as the window: follows Transparent + BackgroundTransparency
+		Bg(Splash, O.Transparent and 0.12 or 0)
 		Corner(Splash, MAIN_RADIUS)
+		-- Moving purple + cyan orbs (swappable with OrbImage / Library:SetOrbImage)
+		local SOrbA = Orb("Purple", 0.92, 0.08, 320, 0.65, Splash)
+		local SOrbB = Orb("Cyan", 0.08, 0.92, 320, 0.65, Splash)
+		task.spawn(function()
+			local T0 = os.clock()
+			while SOrbA.Parent and not Win.Destroyed do
+				if Library.Moving then
+					local T = os.clock() - T0
+					SOrbA.Position = UDim2.fromScale(0.92 + math.cos(T * 1.4) * 0.1, 0.08 + math.sin(T * 1.1) * 0.12)
+					SOrbB.Position = UDim2.fromScale(0.08 + math.sin(T * 1.2) * 0.1, 0.92 + math.cos(T * 1.0) * 0.12)
+				end
+				RunService.RenderStepped:Wait()
+			end
+		end)
+		-- Colorless logo / bar (no accent color)
 		local SLogo = New("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -44), Size = UDim2.fromOffset(0, 0),
-			BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, ZIndex = 2,
+			BackgroundColor3 = White, BackgroundTransparency = 0.88, BorderSizePixel = 0, ZIndex = 2,
 		}, Splash)
 		Corner(SLogo, 18)
+		Stroke(SLogo, White, 1.5, 0.6)
 		local SImg = New("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.6),
-			BackgroundTransparency = 1, ImageColor3 = Theme.OnAccent, ZIndex = 3,
+			BackgroundTransparency = 1, ImageColor3 = Theme.Text, ZIndex = 3,
 		}, SLogo)
 		local SFB = New("TextLabel", {
 			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = string.upper(string.sub(PlainTitle, 1, 1)),
-			TextColor3 = Theme.OnAccent, TextSize = 30, Font = FontBlack, ZIndex = 3,
+			TextColor3 = Theme.Text, TextSize = 30, Font = FontBlack, ZIndex = 3,
 		}, SLogo)
-		SetBadgeIcon(SImg, SFB, O.Icon or "layout-grid", Theme.OnAccent, 18, UDim2.fromScale(0.6, 0.6))
+		SetBadgeIcon(SImg, SFB, O.Icon or "layout-grid", Theme.Text, 18, UDim2.fromScale(0.6, 0.6))
 		local STitleText = string.upper(PlainTitle)
 		local STitle = New("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 20), Size = UDim2.fromOffset(400, 32),
@@ -2883,7 +3005,7 @@ function Library:CreateWindow(O)
 			BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, ZIndex = 2,
 		}, Splash)
 		Corner(BarBg, 2)
-		local BarFill = New("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Theme.Accent, BorderSizePixel = 0 }, BarBg)
+		local BarFill = New("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Theme.Text, BorderSizePixel = 0 }, BarBg)
 		Corner(BarFill, 2)
 		Tween(SLogo, 0.35, { Size = UDim2.fromOffset(72, 72) }, Enum.EasingStyle.Back)
 		Tween(BarFill, 1.4, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
