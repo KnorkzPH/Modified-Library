@@ -71,7 +71,10 @@ local function Tween(Object, Time, Props, Style, Direction)
 	return T
 end
 
-local function Corner(Parent, R) return New("UICorner", { CornerRadius = UDim.new(0, R or 10) }, Parent) end
+-- All corners are in PIXELS and always clamped to 1..16 (no 0..1 scale radius anywhere)
+local function Corner(Parent, R)
+	return New("UICorner", { CornerRadius = UDim.new(0, math.clamp(tonumber(R) or 10, 1, 16)) }, Parent)
+end
 
 local function Stroke(Parent, Color, Thickness, Transparency)
 	return New("UIStroke", {
@@ -167,12 +170,20 @@ local function Bg(Obj, Base)
 	return Obj
 end
 
+-- Same as Bg() but for a UIStroke: its Transparency follows the window background transparency
+local function BgStroke(Obj, Base)
+	Base = Base or 0
+	table.insert(BgRegistry, { Obj = Obj, Base = Base, Prop = "Transparency" })
+	Obj.Transparency = BgCalc(Base)
+	return Obj
+end
+
 function Library:SetBackgroundTransparency(V)
 	V = math.clamp(tonumber(V) or 0, 0, 1)
 	Library.BackgroundTransparency = V
 	PruneBg()
 	for _, E in ipairs(BgRegistry) do
-		pcall(function() E.Obj.BackgroundTransparency = BgCalc(E.Base) end)
+		pcall(function() E.Obj[E.Prop or "BackgroundTransparency"] = BgCalc(E.Base) end)
 	end
 end
 
@@ -311,18 +322,18 @@ local function SetBadgeIcon(Img, Fallback, Icon, Tint, Radius, LucideSize)
 	if not Kind then return end
 	local Round = Img:FindFirstChild("BadgeCorner")
 	if not Round then
-		Round = New("UICorner", { Name = "BadgeCorner", CornerRadius = UDim.new(0, 0) }, Img)
+		Round = New("UICorner", { Name = "BadgeCorner", CornerRadius = UDim.new(0, 1) }, Img)
 	end
 	if Kind == "asset" then
 		Img.ImageColor3 = White
 		Img.Size = UDim2.fromScale(1, 1)
 		Img.ScaleType = Enum.ScaleType.Crop
-		Round.CornerRadius = UDim.new(0, Radius or 0)
+		Round.CornerRadius = UDim.new(0, math.clamp(Radius or 1, 1, 16))
 	else
 		Img.ImageColor3 = Tint or Theme.OnAccent
 		Img.Size = LucideSize or UDim2.fromScale(0.6, 0.6)
 		Img.ScaleType = Enum.ScaleType.Fit
-		Round.CornerRadius = UDim.new(0, 0)
+		Round.CornerRadius = UDim.new(0, 1)
 		Img.Image = ""
 		if Fallback then Fallback.Visible = true end
 	end
@@ -692,12 +703,14 @@ end
 
 ----------------------------------------------------------------------
 -- Notifications
--- * Square corners, stacked at the BOTTOM of the screen (bottom-right by default)
+-- * Compact rounded cards (16px corners, 235px wide, height fits the content), stacked at the BOTTOM of the screen
 -- * Colorless: same background as the window, with the moving purple/cyan orbs inside
 -- * Follows CreateWindow({ Transparent }) and Library.BackgroundTransparency
 -- * The auto-dismiss timer is a neutral veil that drains away while the text/icon stays visible
 ----------------------------------------------------------------------
-local NotifGui, NotifHolder, NotifList, NotifAnim
+local NotifGui, NotifHolder, NotifList, NotifAnim, NotifSize
+local NotifWidth = 235          -- px; change with Library:SetNotificationWidth(n)
+local NOTIF_RADIUS = 16         -- px (corners are always 1..16 px)
 local NotifGlows = {}
 local NotifOrder = 0
 local NotifActive = {}
@@ -740,7 +753,7 @@ local function EnsureNotif()
 		end
 	end)
 	NotifHolder = New("Frame", { Name = "Holder", BackgroundTransparency = 1 }, NotifGui)
-	New("UISizeConstraint", { MaxSize = Vector2.new(380, math.huge) }, NotifHolder)
+	NotifSize = New("UISizeConstraint", { MaxSize = Vector2.new(NotifWidth, math.huge) }, NotifHolder)
 	NotifList = List(NotifHolder, 8, { VerticalAlignment = Enum.VerticalAlignment.Bottom })
 	ApplyNotifLayout()
 end
@@ -749,6 +762,12 @@ end
 function Library:SetNotificationPosition(Side)
 	NotifSide = string.find(string.lower(tostring(Side or "")), "left") and "Left" or "Right"
 	ApplyNotifLayout()
+end
+
+-- Width of every notification card in px (default 235). Height always fits the content.
+function Library:SetNotificationWidth(W)
+	NotifWidth = math.clamp(tonumber(W) or 235, 160, 420)
+	if NotifSize and NotifSize.Parent then NotifSize.MaxSize = Vector2.new(NotifWidth, math.huge) end
 end
 
 -- Kept for older scripts: true = lift the stack higher from the bottom edge (useful for mobile)
@@ -763,7 +782,7 @@ function Library:Notify(O)
 	EnsureNotif()
 	-- Colorless on purpose: no per-type tint (O.Color / O.Type are ignored). The look follows the window.
 	local Dur = math.max(tonumber(O.Duration) or 4, 0.5)
-	local OffX = (NotifSide == "Left" and -1 or 1) * 440
+	local OffX = (NotifSide == "Left" and -1 or 1) * (NotifWidth + 60)
 	NotifOrder += 1
 
 	while #NotifActive >= 5 do
@@ -775,54 +794,58 @@ function Library:Notify(O)
 		LayoutOrder = NotifOrder, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
 	}, NotifHolder)
 
-	-- Square card, same background recipe as the window (Theme.Bg + Transparent + BackgroundTransparency)
+	-- Compact rounded card (fixed width, height fits the content). Same background recipe as the window:
+	-- Theme.Bg + Transparent + BackgroundTransparency (the outline fades with it too)
 	local Card = New("Frame", {
 		Position = UDim2.fromOffset(OffX, 0), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY,
-		BackgroundColor3 = Theme.Bg, BorderSizePixel = 0, ClipsDescendants = true,
+		BackgroundColor3 = Theme.Bg, BorderSizePixel = 0,
 	}, Holder)
 	Bg(Card, Library.Transparent and 0.12 or 0)
-	Stroke(Card, Theme.StrokeHi, 1.5, 0)
+	Corner(Card, NOTIF_RADIUS)
+	BgStroke(Stroke(Card, Theme.StrokeHi, 1, 0), Library.Transparent and 0.12 or 0)
 
-	-- Moving purple + cyan orbs inside the card (swappable with an image via Library:SetOrbImage)
-	local Glow = New("Frame", { Name = "Glow", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 1 }, Card)
-	local OrbA = Orb("Purple", 0.1, 0.15, 190, 0.7, Glow)
-	local OrbB = Orb("Cyan", 0.95, 0.9, 190, 0.7, Glow)
+	-- CanvasGroup clips the orbs + timer veil to the rounded corners
+	local Glow = New("CanvasGroup", { Name = "Glow", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, Card)
+	Corner(Glow, NOTIF_RADIUS)
+	-- Moving purple + cyan orbs (swappable with an image via Library:SetOrbImage)
+	local OrbA = Orb("Purple", 0.1, 0.15, 140, 0.7, Glow)
+	local OrbB = Orb("Cyan", 0.95, 0.9, 140, 0.7, Glow)
 	table.insert(NotifGlows, { A = OrbA, B = OrbB, T0 = os.clock(), Seed = math.random() * 6.28 })
 
 	-- Disappearance "bar" merged into the background: neutral veil that drains right to left
 	local Fill = New("Frame", {
 		Name = "TimerFill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 0.9,
 		BorderSizePixel = 0, ZIndex = 1,
-	}, Card)
+	}, Glow)
 
 	local Body = New("Frame", {
 		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, ZIndex = 3,
 	}, Card)
-	Pad(Body, 16, 12, 38, 12)
+	Pad(Body, 14, 12, 32, 12)
 	local TextX = 0
 	if O.Icon then
-		IconLabel(Body, O.Icon, 24, Theme.Text, { Position = UDim2.fromOffset(0, 0) }, "•")
-		TextX = 34
+		IconLabel(Body, O.Icon, 22, Theme.Text, { Position = UDim2.fromOffset(0, 0) }, "•")
+		TextX = 30
 	end
 	local Column = New("Frame", {
 		Position = UDim2.fromOffset(TextX, 0), Size = UDim2.new(1, -TextX, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
 	}, Body)
-	List(Column, 4)
+	List(Column, 3)
 	New("TextLabel", {
 		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-		Text = O.Title or "Notification", TextColor3 = White, TextSize = 17, Font = FontBold, TextWrapped = true,
+		Text = O.Title or "Notification", TextColor3 = White, TextSize = 15, Font = FontBold, TextWrapped = true,
 		TextXAlignment = Left, TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
 	}, Column)
 	if O.Content then
 		New("TextLabel", {
 			LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-			Text = O.Content, TextColor3 = Color3.fromRGB(240, 238, 252), TextSize = 15, Font = FontMed, TextWrapped = true,
+			Text = O.Content, TextColor3 = Color3.fromRGB(240, 238, 252), TextSize = 13, Font = FontMed, TextWrapped = true,
 			TextXAlignment = Left, TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
 		}, Column)
 	end
 	New("TextLabel", {
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 6), Size = UDim2.fromOffset(20, 20),
-		BackgroundTransparency = 1, Text = "×", TextColor3 = Theme.Muted, TextSize = 22, Font = FontBold, ZIndex = 4,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 4), Size = UDim2.fromOffset(20, 20),
+		BackgroundTransparency = 1, Text = "×", TextColor3 = Theme.Muted, TextSize = 20, Font = FontBold, ZIndex = 4,
 	}, Card)
 
 	local Gone = false
@@ -1850,24 +1873,13 @@ function Elements:Section(O)
 	List(Wrap, 8)
 
 	local Align = ({ Left = Left, Center = Enum.TextXAlignment.Center, Right = Right })[O.TextXAlignment or "Left"] or Left
-	local Header = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1 }, Wrap)
+	-- Title only (no icon, no marker), readable 16px
+	local Header = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1 }, Wrap)
 	Pad(Header, 4, 0, 4, 0)
-	local TX = 0
-	if O.Icon then
-		IconLabel(Header, O.Icon, 16, Theme.Accent, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
-		TX = 24
-	else
-		local Mark = New("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(3, 12),
-			BackgroundColor3 = Theme.Accent, BorderSizePixel = 0,
-		}, Header)
-		Corner(Mark, 2)
-		TX = 11
-	end
 	local Lbl = New("TextLabel", {
-		Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -TX, 1, 0), BackgroundTransparency = 1,
-		Text = string.upper(StripRich(O.Title or "Section")), TextColor3 = Color3.fromRGB(190, 197, 212),
-		TextTransparency = O.TextTransparency or 0, TextSize = O.TextSize or 12, Font = FontMono, TextXAlignment = Align,
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
+		Text = StripRich(O.Title or "Section"), TextColor3 = Theme.Text,
+		TextTransparency = O.TextTransparency or 0, TextSize = O.TextSize or 16, Font = FontBold, TextXAlignment = Align,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, Header)
 
@@ -1875,7 +1887,7 @@ function Elements:Section(O)
 	List(Body, 8)
 
 	local Sec = setmetatable({ Win = self.Win, Parent = Body, Page = self.Page, _n = 0 }, SectionClass)
-	function Sec:SetTitle(T) Lbl.Text = string.upper(StripRich(T)) end
+	function Sec:SetTitle(T) Lbl.Text = StripRich(T) end
 	function Sec:Destroy() Wrap:Destroy() end
 	return Sec
 end
@@ -2156,15 +2168,11 @@ function Window:Section(O)
 	O = O or {}
 	local Wrap = New("Frame", { LayoutOrder = self:_NextSide(), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, self.Sidebar)
 	List(Wrap, 4)
-	local Header = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1 }, Wrap)
-	local TX = 8
-	if O.Icon then
-		IconLabel(Header, O.Icon, 14, Theme.Muted, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0) }, "•")
-		TX = 28
-	end
+	-- Title only (no icon), readable 16px
+	local Header = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1 }, Wrap)
 	New("TextLabel", {
-		Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -(TX + 6), 1, 0), BackgroundTransparency = 1,
-		Text = string.upper(StripRich(O.Title or "SECTION")), TextColor3 = Color3.fromRGB(190, 197, 212), TextSize = 11, Font = FontMono,
+		Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -14, 1, 0), BackgroundTransparency = 1,
+		Text = StripRich(O.Title or "Section"), TextColor3 = Theme.Muted, TextSize = 16, Font = FontBold,
 		TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
 	}, Header)
 	local Body = New("Frame", { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, Wrap)
