@@ -1,23 +1,4 @@
---[[
-    ToolkitUI  •  WindUI-compatible API  (v1.1.0)
-
-    local Toolkit = loadstring(game:HttpGet("..."))()
-
-    Toolkit:CreateWindow({ Title, Author, Icon, Size, SideBarWidth, Folder, ToggleKey, ShowIntro, Transparent, User, KeySystem })
-    Window:Tab({ Title, Icon, Locked })           Window:Section({ Title, Icon, Opened })  -> Section:Tab({...})
-    Window:Tag / Dialog / Notify / Divider / Space / SelectTab / Destroy
-
-    Tab:Toggle / Button / Slider / Dropdown / Input / Keybind / Colorpicker / Paragraph / Code / Section / Divider / Space
-    Every element accepts:  Locked = true,  LockTitle = "Text shown on the lock overlay"
-
-    Toolkit:Notify({ Title, Content, Duration, Icon })
-    Toolkit:Popup({ Title, Content, Icon, Buttons })
-
-    Icons (SetLucide):  "bird" (lucide)  |  "lucide:bird"  |  "solar:home-2-bold"  |  "rbxassetid://123"
-    Custom icons:       Toolkit.Creator.AddIcons("solar", { name = "rbxassetid://..." })
-]]
-
-local Library = { Version = "1.1.0" }
+local Library = { Version = "1.2.0" }
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -62,11 +43,9 @@ local FontBold, FontMed, FontBlack = Enum.Font.GothamBold, Enum.Font.GothamMediu
 local Left, Right = Enum.TextXAlignment.Left, Enum.TextXAlignment.Right
 local AutoY, AutoX = Enum.AutomaticSize.Y, Enum.AutomaticSize.X
 local QuartOut, DirOut = Enum.EasingStyle.Quart, Enum.EasingDirection.Out
+local MouseButton1, TouchInput, MouseMove = Enum.UserInputType.MouseButton1, Enum.UserInputType.Touch, Enum.UserInputType.MouseMovement
 local MAIN_RADIUS = 16
 
-----------------------------------------------------------------------
--- Helpers
-----------------------------------------------------------------------
 local function New(Class, Props, Parent)
 	local Object = Instance.new(Class)
 	for K, V in pairs(Props or {}) do
@@ -107,11 +86,6 @@ local function List(Parent, Padding, Props)
 	return New("UIListLayout", P, Parent)
 end
 
-local function Pulse(Object, Prop, A, B, Time)
-	Object[Prop] = A
-	TweenService:Create(Object, TweenInfo.new(Time or 1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { [Prop] = B }):Play()
-end
-
 local function Call(Fn, ...)
 	if type(Fn) == "function" then task.spawn(Fn, ...) end
 end
@@ -133,9 +107,6 @@ local function StripRich(Text)
 	return (tostring(Text):gsub("<[^>]+>", ""))
 end
 
-----------------------------------------------------------------------
--- Icons — Merc-style SetLucide (lucide default, solar:/others supported)
-----------------------------------------------------------------------
 local function safeHttpGet(url)
 	local ok, res = pcall(function() return game:HttpGet(url) end)
 	if ok and type(res) == "string" and #res > 100 then return res end
@@ -151,7 +122,7 @@ local function safeHttpGet(url)
 	return nil
 end
 
-local IconSets = {} -- [set] = { ready, api, waiters, custom }
+local IconSets = {}
 
 local function LoadIconSet(set)
 	if IconSets[set] then return IconSets[set] end
@@ -229,7 +200,6 @@ local function ApplyResolved(Label, V)
 	return false
 end
 
--- SetLucide(imageLabel, name, fallbackLabel)  — fallback label hides once the icon resolves
 local function SetLucide(Label, Icon, Fallback)
 	local Kind, Val = ParseIcon(Icon)
 	if not Kind then return end
@@ -280,9 +250,6 @@ local function IconLabel(Parent, Icon, Size, Color, Props, FallbackText)
 	return L, FB
 end
 
-----------------------------------------------------------------------
--- Shared widgets
-----------------------------------------------------------------------
 local function GradButton(Parent, Text, Size, Position, ColA, ColB, TextSize)
 	local Holder = New("Frame", { Size = Size, Position = Position, BackgroundColor3 = White, BorderSizePixel = 0 }, Parent)
 	Corner(Holder, 10)
@@ -346,9 +313,6 @@ local function Deser(V)
 	return V
 end
 
-----------------------------------------------------------------------
--- Classes
-----------------------------------------------------------------------
 local Window = {}
 Window.__index = Window
 
@@ -372,57 +336,62 @@ function Window:Connect(Signal, Fn)
 	return C
 end
 
+local function IsPointerStart(I)
+	return I.UserInputType == MouseButton1 or I.UserInputType == TouchInput
+end
+
+local function IsTrackedMove(Tracked, I)
+	if not Tracked then return false end
+	if Tracked.UserInputType == TouchInput then return I == Tracked end
+	return I.UserInputType == MouseMove
+end
+
+local function IsTrackedEnd(Tracked, I)
+	if not Tracked then return false end
+	if Tracked.UserInputType == TouchInput then return I == Tracked end
+	return I.UserInputType == MouseButton1
+end
+
 local function MakeDraggable(Win, Handle, Target, GetScale, CanDrag, OnMoved)
-	local Dragging, Start, StartPos, DragInput = false, nil, nil, nil
+	local Tracked, Start, StartPos = nil, nil, nil
 	Handle.InputBegan:Connect(function(I)
-		if (I.UserInputType == Enum.UserInputType.MouseButton1 or I.UserInputType == Enum.UserInputType.Touch)
-			and (not CanDrag or CanDrag()) then
-			Dragging, Start, StartPos = true, I.Position, Target.Position
-			I.Changed:Connect(function()
-				if I.UserInputState == Enum.UserInputState.End then Dragging = false end
-			end)
-		end
-	end)
-	Handle.InputChanged:Connect(function(I)
-		if I.UserInputType == Enum.UserInputType.MouseMovement or I.UserInputType == Enum.UserInputType.Touch then DragInput = I end
+		if Tracked or not IsPointerStart(I) then return end
+		if CanDrag and not CanDrag() then return end
+		Tracked, Start, StartPos = I, I.Position, Target.Position
 	end)
 	Win:Connect(UserInputService.InputChanged, function(I)
-		if I == DragInput and Dragging then
-			local D = (I.Position - Start) / GetScale()
-			Target.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + D.X, StartPos.Y.Scale, StartPos.Y.Offset + D.Y)
-			if OnMoved and D.Magnitude > 4 then OnMoved() end
-		end
+		if not IsTrackedMove(Tracked, I) then return end
+		local D = (I.Position - Start) / GetScale()
+		Target.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + D.X, StartPos.Y.Scale, StartPos.Y.Offset + D.Y)
+		if OnMoved and D.Magnitude > 4 then OnMoved() end
+	end)
+	Win:Connect(UserInputService.InputEnded, function(I)
+		if IsTrackedEnd(Tracked, I) then Tracked = nil end
 	end)
 end
 
 local function MakeDrag(Win, Hit, OnMove, Page)
-	local Active = false
+	local Tracked = nil
 	local function Pos(I) return Vector2.new(I.Position.X, I.Position.Y + InsetY()) end
+	local function Stop()
+		Tracked = nil
+		if Page and Page.Parent then Page.ScrollingEnabled = true end
+	end
+	Hit.Active = true
 	Hit.InputBegan:Connect(function(I)
-		if I.UserInputType == Enum.UserInputType.MouseButton1 or I.UserInputType == Enum.UserInputType.Touch then
-			Active = true
-			if Page then Page.ScrollingEnabled = false end
-			OnMove(Pos(I))
-			local C
-			C = I.Changed:Connect(function()
-				if I.UserInputState == Enum.UserInputState.End then
-					Active = false
-					if Page then Page.ScrollingEnabled = true end
-					C:Disconnect()
-				end
-			end)
-		end
+		if Tracked or not IsPointerStart(I) then return end
+		Tracked = I
+		if Page then Page.ScrollingEnabled = false end
+		OnMove(Pos(I))
 	end)
 	Win:Connect(UserInputService.InputChanged, function(I)
-		if Active and (I.UserInputType == Enum.UserInputType.MouseMovement or I.UserInputType == Enum.UserInputType.Touch) then
-			OnMove(Pos(I))
-		end
+		if IsTrackedMove(Tracked, I) then OnMove(Pos(I)) end
+	end)
+	Win:Connect(UserInputService.InputEnded, function(I)
+		if IsTrackedEnd(Tracked, I) then Stop() end
 	end)
 end
 
-----------------------------------------------------------------------
--- Dialog / Popup (shared builder)
-----------------------------------------------------------------------
 local function BuildDialog(Host, O)
 	O = O or {}
 	local D = {}
@@ -437,7 +406,7 @@ local function BuildDialog(Host, O)
 
 		Box = New("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 340, 0, 0),
-			AutomaticSize = AutoY, BackgroundColor3 = Color3.fromRGB(24, 22, 40), BorderSizePixel = 0, ZIndex = 2,
+			AutomaticSize = AutoY, BackgroundColor3 = Color3.fromRGB(24, 22, 40), BorderSizePixel = 0, ZIndex = 2, Active = true,
 		}, Host.Modal)
 		Corner(Box, 14)
 		Gradient(Stroke(Box, White, 2, 0.05), Theme.Violet, Theme.Cyan, 45)
@@ -539,9 +508,6 @@ function Library:Popup(O)
 	return D
 end
 
-----------------------------------------------------------------------
--- Notifications (library level, like WindUI:Notify)
-----------------------------------------------------------------------
 local NotifGui, NotifHolder
 local NotifLower = false
 
@@ -620,22 +586,18 @@ function Library:Notify(O)
 	return { Close = Dismiss }
 end
 
-----------------------------------------------------------------------
--- Elements
-----------------------------------------------------------------------
 function Elements:_Next()
 	self._n += 1
 	return self._n
 end
 
--- Base card. Returns { Root, Card, Head, Title, Desc, Icon, Stroke, Lock, LockLabel, Base }
 function Elements:_Card(O, RightW, Clickable)
 	RightW = RightW or 0
 	local Root = New("Frame", {
 		Name = "Element", LayoutOrder = self:_Next(), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
 	}, self.Parent)
 	local Card = New("Frame", {
-		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundColor3 = Theme.Card, BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundColor3 = Theme.Card, BorderSizePixel = 0, Active = true,
 	}, Root)
 	Corner(Card, 10)
 	local CS = Stroke(Card, Theme.Stroke, 1)
@@ -643,7 +605,6 @@ function Elements:_Card(O, RightW, Clickable)
 	New("UISizeConstraint", { MinSize = Vector2.new(0, 44) }, Card)
 	List(Card, 8, { VerticalAlignment = Enum.VerticalAlignment.Center })
 
-	-- Lock overlay (Locked = true / LockTitle = "...")
 	local Lock = New("TextButton", {
 		Name = "LockOverlay", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(8, 8, 14), BackgroundTransparency = 0.35,
 		BorderSizePixel = 0, Text = "", AutoButtonColor = false, Visible = false, ZIndex = 20,
@@ -835,17 +796,19 @@ function Elements:Slider(O)
 	if Default == nil then Default = O.Default end
 	if Default == nil and type(O.Value) == "number" then Default = O.Value end
 	local Step = O.Step or 1
-	local C = self:_Card(O, 70)
+	local C = self:_Card(O, 76)
 	local Obj = { Value = Min }
 
 	local ValueBox = New("TextBox", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(70, 18),
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(76, 18),
 		BackgroundTransparency = 1, Text = "", TextColor3 = Theme.Violet, TextSize = 12, Font = FontBold, TextXAlignment = Right,
-		ClearTextOnFocus = false, TextEditable = O.IsTextbox == true,
+		ClearTextOnFocus = false, TextEditable = O.IsTextbox == true, TextTruncate = Enum.TextTruncate.AtEnd,
 	}, C.Head)
-	local Holder = New("Frame", { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1 }, C.Card)
+	local Holder = New("Frame", {
+		LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Active = true,
+	}, C.Card)
 	local Track = New("Frame", {
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.new(1, 0, 0, 6),
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 9, 0.5, 0), Size = UDim2.new(1, -18, 0, 6),
 		BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0,
 	}, Holder)
 	Corner(Track, 3)
@@ -916,13 +879,14 @@ function Elements:Dropdown(O)
 
 	local Holder = New("Frame", {
 		LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, ClipsDescendants = true, Visible = false,
+		Active = true,
 	}, C.Card)
 	Corner(Holder, 8)
 	Stroke(Holder, Theme.Stroke, 1)
 	local Scroll = New("ScrollingFrame", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2,
 		ScrollBarImageColor3 = Theme.Violet, CanvasSize = UDim2.new(), AutomaticCanvasSize = AutoY,
-		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y, Active = true,
 	}, Holder)
 	Pad(Scroll, 4, 4, 4, 4)
 	List(Scroll, 2)
@@ -1437,9 +1401,15 @@ function Elements:Section(O)
 	local Header = New("TextButton", {
 		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
 	}, Wrap)
+	local TX = 0
+	if O.Icon then
+		IconLabel(Header, O.Icon, 16, Theme.Violet, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
+		TX = 24
+	end
 	local Lbl = New("TextLabel", {
-		Size = UDim2.new(1, -24, 1, 0), BackgroundTransparency = 1, RichText = true, Text = O.Title or "Section", TextColor3 = Theme.Text,
-		TextTransparency = O.TextTransparency or 0.05, TextSize = O.TextSize or 15, Font = FontBold, TextXAlignment = Align,
+		Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -(TX + 24), 1, 0), BackgroundTransparency = 1, RichText = true,
+		Text = O.Title or "Section", TextColor3 = Theme.Text, TextTransparency = O.TextTransparency or 0.05,
+		TextSize = O.TextSize or 15, Font = FontBold, TextXAlignment = Align,
 	}, Header)
 	local Chev = IconLabel(Header, "chevron-down", 14, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -2, 0.5, 0) }, "v")
 
@@ -1469,9 +1439,6 @@ function Elements:Section(O)
 	return Sec
 end
 
-----------------------------------------------------------------------
--- Tabs (sidebar)  —  Tab icon sits on the RIGHT side of the tab title (IconAlign = "Left" to flip)
-----------------------------------------------------------------------
 function TabClass:Select(Instant)
 	local Win = self.Win
 	if self.Locked then return end
@@ -1498,7 +1465,6 @@ function Window:_MakeTab(O, ParentFrame)
 	O = O or {}
 	local Tab = setmetatable({ Win = self, _n = 0, Title = O.Title or "Tab", Locked = false }, TabClass)
 
-	-- The whole tab (fill + outline) is drawn INSIDE the button bounds, so the sidebar can never clip the outline.
 	local Btn = New("TextButton", {
 		LayoutOrder = self:_NextSide(), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, BorderSizePixel = 0,
 		AutoButtonColor = false, Text = "",
@@ -1512,15 +1478,15 @@ function Window:_MakeTab(O, ParentFrame)
 	Gradient(ActiveFill, Theme.Violet, Theme.Blue, 20)
 	local ActStroke = Stroke(ActiveFill, Theme.Violet, 1, 1)
 
-	local IconLeft = O.IconAlign == "Left"
+	local IconRight = O.IconAlign == "Right"
 	local Ico, IcoFB
 	local TextL = 12
 	if O.Icon then
-		if IconLeft then
+		if IconRight then
+			Ico, IcoFB = IconLabel(Btn, O.Icon, 16, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0.5, 0) }, "•")
+		else
 			Ico, IcoFB = IconLabel(Btn, O.Icon, 16, Theme.Muted, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 11, 0.5, 0) }, "•")
 			TextL = 35
-		else
-			Ico, IcoFB = IconLabel(Btn, O.Icon, 16, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0.5, 0) }, "•")
 		end
 	end
 	local LockIco, LockFB = IconLabel(Btn, "lock", 14, Theme.Amber, {
@@ -1535,7 +1501,7 @@ function Window:_MakeTab(O, ParentFrame)
 
 	local function Reflow()
 		local R = 10
-		if (Ico and not IconLeft) or Tab.Locked then R = 36 end
+		if (Ico and IconRight) or Tab.Locked then R = 36 end
 		Lbl.Size = UDim2.new(1, -(TextL + R), 1, 0)
 	end
 	Reflow()
@@ -1543,12 +1509,12 @@ function Window:_MakeTab(O, ParentFrame)
 	local Page = New("ScrollingFrame", {
 		Name = "Page_" .. Tab.Title, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
 		ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Violet, CanvasSize = UDim2.new(), AutomaticCanvasSize = AutoY,
-		ScrollingDirection = Enum.ScrollingDirection.Y, Visible = false,
+		ScrollingDirection = Enum.ScrollingDirection.Y, Visible = false, Active = true,
 	}, self.Content)
 	Pad(Page, 3, 3, 12, 3)
 	List(Page, 8)
 
-	Tab.Parent, Tab.Page, Tab.TabButton = Page, Page, Btn -- NOTE: never name a field "Button": it would shadow Tab:Button()
+	Tab.Parent, Tab.Page, Tab.TabButton = Page, Page, Btn
 
 	local Selected = false
 	function Tab:_SetActive(On, Instant)
@@ -1570,7 +1536,7 @@ function Window:_MakeTab(O, ParentFrame)
 	function Tab:Lock()
 		Tab.Locked = true
 		Lbl.TextTransparency = 0.5
-		if not IconLeft then ShowIcon(Ico, IcoFB, false) end
+		if IconRight then ShowIcon(Ico, IcoFB, false) end
 		ShowIcon(LockIco, LockFB, true)
 		Reflow()
 	end
@@ -1578,7 +1544,7 @@ function Window:_MakeTab(O, ParentFrame)
 		Tab.Locked = false
 		Lbl.TextTransparency = 0
 		ShowIcon(LockIco, LockFB, false)
-		if not IconLeft then ShowIcon(Ico, IcoFB, true) end
+		if IconRight then ShowIcon(Ico, IcoFB, true) end
 		Reflow()
 	end
 	function Tab:SetTitle(T)
@@ -1617,18 +1583,22 @@ end
 
 function Window:Tab(O) return self:_MakeTab(O, self.Sidebar) end
 
--- Window:Section = group of tabs in the sidebar
 function Window:Section(O)
 	if type(O) == "string" then O = { Title = O } end
 	O = O or {}
 	local Wrap = New("Frame", { LayoutOrder = self:_NextSide(), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, self.Sidebar)
 	List(Wrap, 4)
 	local Header = New("TextButton", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, Wrap)
+	local TX = 6
+	if O.Icon then
+		IconLabel(Header, O.Icon, 14, Theme.Muted, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0) }, "•")
+		TX = 26
+	end
 	New("TextLabel", {
-		Position = UDim2.fromOffset(6, 0), Size = UDim2.new(1, -34, 1, 0), BackgroundTransparency = 1, Text = string.upper(StripRich(O.Title or "SECTION")),
+		Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -(TX + 28), 1, 0), BackgroundTransparency = 1, Text = string.upper(StripRich(O.Title or "SECTION")),
 		TextColor3 = Theme.Muted, TextSize = 10, Font = FontBold, TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
 	}, Header)
-	local Chev = IconLabel(Header, O.Icon or "chevron-down", 14, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0) }, "v")
+	local Chev = IconLabel(Header, "chevron-down", 14, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0) }, "v")
 	local Body = New("Frame", { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, Wrap)
 	List(Body, 4)
 
@@ -1638,7 +1608,7 @@ function Window:Section(O)
 	function Sec:SetOpen(Val)
 		IsOpen = Val
 		Body.Visible = Val
-		if not O.Icon then Tween(Chev, 0.2, { Rotation = Val and 0 or -90 }) end
+		Tween(Chev, 0.2, { Rotation = Val and 0 or -90 })
 	end
 	Header.MouseButton1Click:Connect(function() Sec:SetOpen(not IsOpen) end)
 	Sec:SetOpen(IsOpen)
@@ -1660,10 +1630,7 @@ function Window:SelectTab(Index)
 	if T then T:Select() end
 end
 
-----------------------------------------------------------------------
--- Window API
-----------------------------------------------------------------------
-function Window:SetStatus() end -- status bar was removed; kept so old scripts don't error
+function Window:SetStatus() end
 
 function Window:Open()
 	if self.Destroyed or not self.Hidden then return end
@@ -1734,7 +1701,6 @@ end
 
 function Window:Notify(O) return Library:Notify(O) end
 
--- Shows immediately (like WindUI). Calling :Show() afterwards is harmless.
 function Window:Dialog(O)
 	local D = BuildDialog(self.Host, O)
 	D:Show()
@@ -1777,9 +1743,6 @@ function Window:Destroy()
 	if Ok and T then T.Completed:Connect(Kill) else Kill() end
 end
 
-----------------------------------------------------------------------
--- ConfigManager (WindUI-style)
-----------------------------------------------------------------------
 local function MakeConfigManager(Win)
 	local CM = { Configs = {} }
 	local Dir = "ToolkitUI/" .. Win.Folder .. "/config"
@@ -1840,9 +1803,6 @@ local function MakeConfigManager(Win)
 	return CM
 end
 
-----------------------------------------------------------------------
--- Key system gate (WindUI KeySystem options: Key, Note, URL, SaveKey, Thumbnail)
-----------------------------------------------------------------------
 local function BuildKeyGate(Win, KS)
 	local Keys = type(KS.Key) == "table" and KS.Key or { KS.Key }
 	local KeyFile = "ToolkitUI/" .. Win.Folder .. "/key.txt"
@@ -1967,9 +1927,6 @@ local function BuildKeyGate(Win, KS)
 	end
 end
 
-----------------------------------------------------------------------
--- CreateWindow
-----------------------------------------------------------------------
 function Library:CreateWindow(O)
 	O = O or {}
 
@@ -2028,7 +1985,7 @@ function Library:CreateWindow(O)
 
 	local Main = New("Frame", {
 		Name = "Main", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = O.Transparent and 0.12 or 0,
-		BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2,
+		BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Active = true,
 	}, Root)
 	Corner(Main, MAIN_RADIUS)
 	Gradient(Main, Theme.Bg2, Theme.Bg, 135)
@@ -2047,7 +2004,6 @@ function Library:CreateWindow(O)
 	local Orb2 = Orb(Theme.Cyan, 0.95, 0.95, 320, 0.72, Background)
 	local Particles = MakeParticles(Background, 14)
 
-	-- TopBar
 	local TopBar = New("Frame", { Name = "TopBar", Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 1, ZIndex = 5 }, Main)
 	local Logo = New("Frame", {
 		Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(14, 10), BackgroundColor3 = White, BorderSizePixel = 0,
@@ -2079,7 +2035,6 @@ function Library:CreateWindow(O)
 	local CloseButton = IconButton(TopBar, "×", UDim2.new(1, -40, 0, 14), Theme.Red)
 	local MinButton = IconButton(TopBar, "–", UDim2.new(1, -72, 0, 14), Theme.Violet)
 
-	-- Tags grow to the left of the minimise button; the title shrinks to make room so nothing overlaps.
 	Win.TagFrame = New("Frame", {
 		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -82, 0, 15), Size = UDim2.fromOffset(0, 24),
 		AutomaticSize = AutoX, BackgroundTransparency = 1,
@@ -2100,18 +2055,16 @@ function Library:CreateWindow(O)
 	}, Main)
 	New("UIGradient", { Color = ColorSequence.new(Theme.Violet, Theme.Cyan), Transparency = NumberSequence.new(0.2, 1) }, Divider)
 
-	-- Sidebar: padded on every side, so tab fills/outlines are never cut off or pushed over the edge.
 	local SideBottom = UserCfg and 62 or 12
 	local Sidebar = New("ScrollingFrame", {
 		Name = "Sidebar", Position = UDim2.fromOffset(8, 60), Size = UDim2.new(0, SBW + 8, 1, -(60 + SideBottom)),
 		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 0, CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = AutoY, ScrollingDirection = Enum.ScrollingDirection.Y, ClipsDescendants = true, ZIndex = 5,
+		AutomaticCanvasSize = AutoY, ScrollingDirection = Enum.ScrollingDirection.Y, ClipsDescendants = true, ZIndex = 5, Active = true,
 	}, Main)
 	Pad(Sidebar, 4, 4, 4, 4)
 	List(Sidebar, 4)
 	Win.Sidebar = Sidebar
 
-	-- thin separator between sidebar and content
 	New("Frame", {
 		Position = UDim2.fromOffset(SBW + 20, 68), Size = UDim2.new(0, 1, 1, -(68 + 16)), BackgroundColor3 = Theme.Stroke,
 		BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 5,
@@ -2142,14 +2095,12 @@ function Library:CreateWindow(O)
 		UC.MouseButton1Click:Connect(function() Call(UserCfg.Callback) end)
 	end
 
-	-- Content now runs all the way to the bottom (status bar removed)
 	local Content = New("Frame", {
 		Name = "Content", Position = UDim2.fromOffset(SBW + 26, 62), Size = UDim2.new(1, -(SBW + 26 + 12), 1, -(62 + 12)),
-		BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 5,
+		BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 5, Active = true,
 	}, Main)
 	Win.Content = Content
 
-	-- Dialog host
 	local Modal = New("Frame", { Name = "Modal", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 40 }, Main)
 	local Dim = New("Frame", {
 		Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -2159,9 +2110,9 @@ function Library:CreateWindow(O)
 	Win.Modal, Win.Dim = Modal, Dim
 	Win.Host = { Modal = Modal, Dim = Dim }
 
-	-- Open button (bubble)
 	local Bubble = New("Frame", {
 		Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -64, 0.5, -24), BackgroundColor3 = White, BorderSizePixel = 0, Visible = false,
+		Active = true,
 	}, Gui)
 	Corner(Bubble, 24)
 	Gradient(Bubble, Theme.Violet, Theme.Cyan, 45)
@@ -2169,7 +2120,7 @@ function Library:CreateWindow(O)
 	local BubbleButton = New("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "" }, Bubble)
 	local BubbleImg = New("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(24, 24),
-		BackgroundTransparency = 1, ImageColor3 = White, Active = false,
+		BackgroundTransparency = 1, ImageColor3 = White,
 	}, Bubble)
 	local BubbleFB = New("TextLabel", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "≡", TextColor3 = White, TextSize = 20, Font = FontBold,
@@ -2177,7 +2128,6 @@ function Library:CreateWindow(O)
 	SetLucide(BubbleImg, O.Icon or "layout-grid", BubbleFB)
 	Win.Bubble, Win.BubbleImg, Win.BubbleFB = Bubble, BubbleImg, BubbleFB
 
-	-- Dragging / buttons / toggle key
 	MakeDraggable(Win, TopBar, Root, function() return RootScale.Scale end, function() return not Modal.Visible end)
 	local BubbleMoved = false
 	MakeDraggable(Win, BubbleButton, Bubble, function() return 1 end, nil, function() BubbleMoved = true end)
@@ -2196,7 +2146,6 @@ function Library:CreateWindow(O)
 		if I.KeyCode == Win.ToggleKey then Win:Toggle() end
 	end)
 
-	-- Animation loop
 	local Elapsed, Acc = 0, 0
 	Win:Connect(RunService.RenderStepped, function(Dt)
 		if Win.Destroyed or Win.Hidden then return end
@@ -2220,13 +2169,12 @@ function Library:CreateWindow(O)
 
 	Win.ConfigManager = MakeConfigManager(Win)
 
-	-- Intro splash
 	if O.ShowIntro == false then
 		RootScale.Scale = TargetScale
 	else
 		Tween(RootScale, 0.4, { Scale = TargetScale }, Enum.EasingStyle.Back)
 		local Splash = New("CanvasGroup", {
-			Name = "Splash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Theme.Bg, BorderSizePixel = 0, ZIndex = 100,
+			Name = "Splash", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Theme.Bg, BorderSizePixel = 0, ZIndex = 100, Active = true,
 		}, Main)
 		Corner(Splash, MAIN_RADIUS)
 		Gradient(Splash, Theme.Bg2, Theme.Bg, 135)
@@ -2278,7 +2226,6 @@ function Library:CreateWindow(O)
 		end)
 	end
 
-	-- Key system (blocks like WindUI until a valid key is entered)
 	if type(O.KeySystem) == "table" then
 		Win._Unlocked = false
 		BuildKeyGate(Win, O.KeySystem)
