@@ -1,4 +1,4 @@
-local Library = { Version = "2.1.0" }
+local Library = { Version = "2.2.0" }
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -210,6 +210,16 @@ function Library:SetTransparent(V)
 	Library:SetBackgroundTransparency(Library.BackgroundTransparency)
 end
 
+-- Opacity: 0 = invisible backgrounds, 1 = fully visible
+function Library:SetOpacity(V)
+	V = math.clamp(tonumber(V) or 1, 0, 1)
+	Library:SetBackgroundTransparency(1 - V)
+end
+
+function Library:GetOpacity()
+	return 1 - Library.BackgroundTransparency
+end
+
 local function safeHttpGet(url)
 	local ok, res = pcall(function() return game:HttpGet(url) end)
 	if ok and type(res) == "string" and #res > 100 then return res end
@@ -225,29 +235,87 @@ local function safeHttpGet(url)
 	return nil
 end
 
+-- Understands: { Icons = { name = { Image, ImageRectSize, ImageRectPosition } }, Spritesheets = { ["1"] = "rbxassetid://..." } }
+-- and plain { name = <asset / table> } tables.
+local function ResolveFromTable(T, Name)
+	if type(T) ~= "table" then return nil end
+	local Set = T.Icons or T.icons
+	local Entry
+	if type(Set) == "table" then Entry = Set[Name] end
+	if Entry == nil then Entry = rawget(T, Name) end
+	if Entry == nil then return nil end
+	if type(Entry) ~= "table" then return Entry end
+	local Sheets = T.Spritesheets or T.Spritesheet or T.Sheets
+	local Img = Entry.Image
+	if Img == nil then Img = Entry[1] end
+	if type(Sheets) == "table" and Img ~= nil then
+		local Sheet = Sheets[tostring(Img)] or Sheets[Img]
+		if Sheet ~= nil then
+			return { Sheet, {
+				ImageRectSize = Entry.ImageRectSize,
+				ImageRectPosition = Entry.ImageRectPosition or Entry.ImageRectOffset,
+			} }
+		end
+	end
+	return Entry
+end
+
 local IconSets = {}
 
 local function LoadIconSet(set)
 	if IconSets[set] then return IconSets[set] end
-	local S = { ready = false, api = nil, waiters = {}, custom = {} }
+	local S = { ready = false, api = nil, waiters = {}, custom = {}, warned = {} }
 	IconSets[set] = S
 	task.spawn(function()
 		local ok, result = pcall(function()
+			local Direct, V2
+
+			-- Source 1: spritesheet table (<set>/dist/Icons.lua)
 			local directSrc = safeHttpGet("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/" .. set .. "/dist/Icons.lua")
-			if directSrc and type(directSrc) == "string" and #directSrc > 100 then
-				local iconsTable = loadstring(directSrc)()
-				if type(iconsTable) == "table" then
-					return { GetIcon = function(name) return iconsTable[name] or name end }
+			if directSrc and #directSrc > 100 then
+				local Fn = loadstring(directSrc)
+				if Fn then
+					local OkD, T = pcall(Fn)
+					if OkD and type(T) == "table" then Direct = T end
 				end
 			end
-			local src = safeHttpGet("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua")
-			if not src or type(src) ~= "string" then error("HttpGet returned " .. tostring(type(src)) .. " / empty") end
-			local IconsV2 = loadstring(src)()
-			if IconsV2.SetIconsType then IconsV2.SetIconsType(set) end
+
+			-- Source 2: Main-v2 API (only fetched when source 1 is missing or can't resolve a known icon)
+			local needV2 = true
+			if Direct then
+				for _, Probe in ipairs({ "check", "home", "x" }) do
+					if ResolveFromTable(Direct, Probe) ~= nil then needV2 = false break end
+				end
+			end
+			if needV2 then
+				local src = safeHttpGet("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua")
+				if src then
+					local Fn = loadstring(src)
+					if Fn then
+						local OkV, Api = pcall(Fn)
+						if OkV and type(Api) == "table" then
+							if Api.SetIconsType then pcall(Api.SetIconsType, set) end
+							V2 = Api
+						end
+					end
+				end
+			end
+			if not Direct and not V2 then error("no icon source reachable") end
+
 			return {
 				GetIcon = function(name)
-					if IconsV2.GetIcon then return IconsV2.GetIcon(name) end
-					if IconsV2.Icon then return IconsV2.Icon(name, set) end
+					local R = ResolveFromTable(Direct, name)
+					if R ~= nil then return R end
+					if V2 then
+						if V2.GetIcon then
+							local OkG, G = pcall(V2.GetIcon, name)
+							if OkG and G ~= nil and G ~= name then return G end
+						end
+						if V2.Icon then
+							local OkI, I = pcall(V2.Icon, name, set)
+							if OkI and I ~= nil and I ~= name then return I end
+						end
+					end
 					return name
 				end,
 			}
@@ -323,6 +391,9 @@ local function SetLucide(Label, Icon, Fallback)
 		end
 		if V ~= nil and ApplyResolved(Label, V) then
 			if Fallback then Fallback.Visible = false end
+		elseif S.api and not S.warned[Val] then
+			S.warned[Val] = true
+			warn("[ToolkitUI] icon not found: " .. Kind .. ":" .. tostring(Val))
 		end
 	end
 	if S.ready then Try() else table.insert(S.waiters, Try) end
@@ -2219,7 +2290,7 @@ function Window:_MakeTab(O, ParentFrame)
 	end)
 
 	table.insert(self.Tabs, Tab)
-	if not self.CurrentTab and not Tab.Locked then Tab:Select(true) end
+	-- No auto-select: the content stays blank until Tab:Select() is called (or the user clicks a tab)
 	return Tab
 end
 
@@ -2326,12 +2397,20 @@ function Window:SetTransparent(V)
 	Library:SetTransparent(V)
 end
 
+-- Opacity: 0 = invisible backgrounds, 1 = fully visible
+function Window:SetOpacity(V)
+	Library:SetOpacity(V)
+end
+
 function Window:Tag(O)
 	if type(O) == "string" then O = { Title = O } end
 	O = O or {}
 	self._tagN += 1
 	local Col = ParseColor(O.Color, Theme.Accent)
-	local Rec = { Title = tostring(O.Title or "Tag"), HasIcon = O.Icon ~= nil and O.Icon ~= "" }
+	local Rec = {
+		Title = tostring(O.Title or "Tag"), HasIcon = O.Icon ~= nil and O.Icon ~= "",
+		MinTextW = tonumber(O.MinWidth) or 0,
+	}
 
 	local Tag = New("Frame", {
 		Name = "Tag", LayoutOrder = self._tagN, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
@@ -2356,7 +2435,7 @@ function Window:Tag(O)
 	Rec.Frame, Rec.Wrap, Rec.Lbl = Tag, Wrap, Lbl
 	local function Measure()
 		local Ok, S = pcall(function() return TextService:GetTextSize(Rec.Title, 12, FontBold, Vector2.new(1000, 24)) end)
-		Rec.TextW = (Ok and S and S.X or #Rec.Title * 7) + 2
+		Rec.TextW = math.max((Ok and S and S.X or #Rec.Title * 7) + 2, Rec.MinTextW)
 	end
 	Measure()
 	table.insert(self._tags, Rec)
@@ -2717,7 +2796,17 @@ end
 function Library:CreateWindow(O)
 	O = O or {}
 
-	Library.Transparent = O.Transparent and true or false
+	-- Transparent = true/false, or a number 0-1 (1 = visible, 0 = invisible)
+	if type(O.Transparent) == "number" then
+		Library.Transparent = true
+		Library:SetOpacity(O.Transparent)
+	else
+		Library.Transparent = O.Transparent and true or false
+	end
+	-- Opacity = 0-1 (1 = visible, 0 = invisible)
+	if type(O.Opacity) == "number" then
+		Library:SetOpacity(O.Opacity)
+	end
 	Library.Moving = O.MovingAnimation ~= false
 	if O.OrbImage ~= nil then Library:SetOrbImage(O.OrbImage, O.OrbImageTransparency) end
 	if O.HideOrbs ~= nil then Library:SetOrbsHidden(O.HideOrbs) end
@@ -2729,6 +2818,7 @@ function Library:CreateWindow(O)
 		Library:SetNotificationPosition(O.NotificationPosition)
 	end
 
+	-- legacy option (0 = solid, 1 = invisible); overrides Transparent/Opacity if set
 	if type(O.BackgroundTransparency) == "number" then
 		Library:SetBackgroundTransparency(O.BackgroundTransparency)
 	end
@@ -2739,6 +2829,7 @@ function Library:CreateWindow(O)
 	local FolderName = O.Folder or O.ConfigFolder or "ToolkitUI"
 	local Name = "ToolkitUI_" .. FolderName
 	local UserCfg = type(O.User) == "table" and O.User.Enabled and O.User or nil
+	local KeyCfg = type(O.KeySystem) == "table" and O.KeySystem.Enabled == true and O.KeySystem or nil
 	local PlainTitle = StripRich(O.Title or "ToolkitUI")
 
 	local Win = setmetatable({
@@ -2833,7 +2924,7 @@ function Library:CreateWindow(O)
 
 	local TAG_EDGE = tonumber(O.TagOffset) or 114
 	local TAG_GAP = tonumber(O.TagSpacing) or 8
-	local MIN_TITLE = 110
+	local MIN_TITLE = 96
 	local TagSep = New("Frame", {
 		Name = "TagSeparator", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -(TAG_EDGE - 12), 0, 16),
 		Size = UDim2.fromOffset(1, 22), BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, Visible = false,
@@ -2850,21 +2941,27 @@ function Library:CreateWindow(O)
 		local N = #Tags
 		local Avail = math.max(BASE_W - 58 - MIN_TITLE - TAG_EDGE - 14, 60)
 
+		-- Level 1 = roomy, level 2 = compact (icons are KEPT), level 3 = tightest (icons hidden)
 		local function Natural(T, L)
-			local P = L == 1 and 9 or 7
-			local Ic = (L == 1 and T.HasIcon) and 18 or 0
+			local P = L == 1 and 9 or (L == 2 and 7 or 6)
+			local Ic = 0
+			if T.HasIcon then
+				if L == 1 then Ic = 18 elseif L == 2 then Ic = 16 end
+			end
 			return P * 2 + Ic + T.TextW, P, Ic
 		end
 
 		local ShownW = 0
 		if N > 0 then
+			local function GapFor(L) return L == 1 and TAG_GAP or math.min(TAG_GAP, 6) end
 			local function Total(L)
-				local S = TAG_GAP * (N - 1)
+				local S = GapFor(L) * (N - 1)
 				for _, T in ipairs(Tags) do S += (Natural(T, L)) end
 				return S
 			end
-			local L = Total(1) <= Avail and 1 or 2
-			local Gap = TAG_GAP
+			local L = 3
+			if Total(1) <= Avail then L = 1 elseif Total(2) <= Avail then L = 2 end
+			local Gap = GapFor(L)
 			local Widths, Sum = {}, 0
 			for I, T in ipairs(Tags) do
 				Widths[I] = (Natural(T, L))
@@ -2922,13 +3019,14 @@ function Library:CreateWindow(O)
 	List(Sidebar, 4)
 	Win.Sidebar = Sidebar
 
-	New("Frame", {
+	local SideDivider = New("Frame", {
 		Position = UDim2.fromOffset(SBW + 20, 68), Size = UDim2.new(0, 1, 1, -(68 + 16)), BackgroundColor3 = Theme.Stroke,
 		BorderSizePixel = 0, ZIndex = 5,
 	}, Main)
 
+	local UC
 	if UserCfg then
-		local UC = New("TextButton", {
+		UC = New("TextButton", {
 			Position = UDim2.new(0, 12, 1, -58), Size = UDim2.fromOffset(SBW, 46), BackgroundColor3 = Theme.Card, BorderSizePixel = 0,
 			AutoButtonColor = false, Text = "", ZIndex = 5,
 		}, Main)
@@ -2958,6 +3056,15 @@ function Library:CreateWindow(O)
 		BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 5, Active = true,
 	}, Main)
 	Win.Content = Content
+
+	-- Sidebar, divider, user card and content are revealed together (see the watcher below)
+	local function SetChrome(On)
+		Sidebar.Visible = On
+		SideDivider.Visible = On
+		Content.Visible = On
+		if UC then UC.Visible = On end
+	end
+	Win._SetChrome = SetChrome
 
 	local Modal = New("Frame", { Name = "Modal", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, ZIndex = 40 }, Main)
 	local Dim = New("Frame", {
@@ -3048,6 +3155,17 @@ function Library:CreateWindow(O)
 
 	Win._IntroDone = false
 	local LoadCfg = type(O.Loading) == "table" and O.Loading or {}
+	if KeyCfg then Win._Unlocked = false end
+	do
+		local IntroOn = not (O.ShowIntro == false or LoadCfg.Enabled == false)
+		if IntroOn or KeyCfg then
+			SetChrome(false)
+			task.spawn(function()
+				repeat RunService.Heartbeat:Wait() until Win.Destroyed or (Win._IntroDone and Win._Unlocked ~= false)
+				if not Win.Destroyed then SetChrome(true) end
+			end)
+		end
+	end
 	if O.ShowIntro == false or LoadCfg.Enabled == false then
 		RootScale.Scale = TargetScale
 		Win._IntroDone = true
@@ -3143,10 +3261,10 @@ function Library:CreateWindow(O)
 			BarFill.Size = UDim2.fromScale(1, 1)
 			task.wait(0.15)
 			if Win.Destroyed then return end
+			Win._IntroDone = true
 			Tween(Splash, 0.3, { GroupTransparency = 1 })
 			task.wait(0.32)
 			pcall(function() Splash:Destroy() end)
-			Win._IntroDone = true
 		end
 
 		local function Run()
@@ -3172,9 +3290,10 @@ function Library:CreateWindow(O)
 		if Yield then Run() else task.spawn(Run) end
 	end
 
-	if type(O.KeySystem) == "table" then
-		Win._Unlocked = false
-		BuildKeyGate(Win, O.KeySystem)
+	if KeyCfg then
+		-- wait for the loading screen to finish first, then show the key system
+		repeat task.wait(0.05) until Win._IntroDone or Win.Destroyed
+		if not Win.Destroyed then BuildKeyGate(Win, KeyCfg) end
 		repeat task.wait(0.1) until Win._Unlocked or Win.Destroyed
 	end
 
@@ -3202,4 +3321,3 @@ function Library:CreateWindow(O)
 end
 
 return Library
-
