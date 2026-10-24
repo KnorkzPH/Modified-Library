@@ -5,6 +5,7 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
 local RunService = game:GetService("RunService")
 local GuiService = game:GetService("GuiService")
 local LocalPlayer = Players.LocalPlayer
@@ -100,6 +101,25 @@ local function Call(Fn, ...)
 end
 
 local function InsetY() return GuiService:GetGuiInset().Y end
+
+-- Accepts: Color3, HEX ("#28AAC4", "28AAC4", "#2AC"), or a theme / paragraph color name ("Cyan", "Green"...)
+local function ParseColor(V, Fallback)
+	if typeof(V) == "Color3" then return V end
+	if type(V) == "string" then
+		local Named = Theme[V] or ParagraphColors[V]
+		if typeof(Named) == "Color3" then return Named end
+		local H = V:gsub("%s", "")
+		H = H:gsub("^#", "")
+		H = H:gsub("^0[xX]", "")
+		if #H == 3 then H = H:sub(1, 1):rep(2) .. H:sub(2, 2):rep(2) .. H:sub(3, 3):rep(2) end
+		if #H == 8 then H = H:sub(1, 6) end
+		if #H == 6 and not H:find("%X") then
+			return Color3.fromRGB(tonumber(H:sub(1, 2), 16), tonumber(H:sub(3, 4), 16), tonumber(H:sub(5, 6), 16))
+		end
+	end
+	return Fallback
+end
+Library.ParseColor = ParseColor
 
 local function CopyText(Text)
 	local Fn = setclipboard or toclipboard or (syn and syn.write_clipboard)
@@ -623,7 +643,7 @@ function Library:Notify(O)
 	if type(O) == "string" then O = { Content = O } end
 	O = O or {}
 	EnsureNotif()
-	local Col = O.Color or (O.Type and TypeColors[string.lower(tostring(O.Type))]) or Theme.Accent
+	local Col = ParseColor(O.Color, nil) or (O.Type and TypeColors[string.lower(tostring(O.Type))]) or Theme.Accent
 	local Dur = math.max(tonumber(O.Duration) or 4, 0.5)
 	local OffX = (NotifSide == "Left" and -1 or 1) * 440
 	NotifOrder += 1
@@ -1592,7 +1612,7 @@ function Elements:Paragraph(O)
 	local C = self:_Card({ Title = O.Title, Desc = O.Desc, Icon = O.Image or O.Icon, IconSize = O.ImageSize or 30 }, 0, false, true)
 	local Obj = {}
 
-	local Col = type(O.Color) == "string" and ParagraphColors[O.Color] or (typeof(O.Color) == "Color3" and O.Color) or nil
+	local Col = O.Color ~= nil and ParseColor(O.Color, nil) or nil
 	if Col then
 		C.Group.Frame.BackgroundColor3 = Theme.Card:Lerp(Col, 0.14)
 		C.Group.Stroke.Color = Col
@@ -2100,32 +2120,68 @@ end
 
 ----------------------------------------------------------------------
 -- Tags: shown left -> right in the order they were added (first Window:Tag = first tag).
--- They sit in a small strip in the title bar, away from the - and x buttons.
--- The strip has inner padding so the tag OUTLINE is never clipped, and the tag keeps its own transparency.
+-- Layout is computed by the window (Win._layoutTags): fixed spacing between tags, never overlapping,
+-- and when there are too many for the title bar they shrink automatically (icons hide first, then labels truncate).
+--   Color = "#FF8A4C"   (HEX, Color3, or a theme name like "Cyan")  -> tint + outline + text
+--   optional: TextColor, BorderColor, BackgroundColor (all HEX-capable), Transparency, Radius
 function Window:Tag(O)
 	if type(O) == "string" then O = { Title = O } end
 	O = O or {}
 	self._tagN += 1
-	local Col = O.Color or Theme.Accent
+	local Col = ParseColor(O.Color, Theme.Accent)
+	local Rec = { Title = tostring(O.Title or "Tag"), HasIcon = O.Icon ~= nil and O.Icon ~= "" }
+
 	local Tag = New("Frame", {
-		Name = "Tag", LayoutOrder = self._tagN, Size = UDim2.fromOffset(0, 24), AutomaticSize = AutoX,
-		BackgroundColor3 = Col, BackgroundTransparency = O.Transparency or 0.82, BorderSizePixel = 0,
+		Name = "Tag", LayoutOrder = self._tagN, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
+		Size = UDim2.fromOffset(40, 24), BackgroundColor3 = ParseColor(O.BackgroundColor, Col),
+		BackgroundTransparency = O.Transparency or 0.82, BorderSizePixel = 0,
 	}, self.TagFrame)
 	Corner(Tag, math.clamp(O.Radius or 7, 0, 12))
-	Stroke(Tag, Col, 1, 0.1)
-	Pad(Tag, 9, 0, 9, 0)
-	List(Tag, 5, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
-	if O.Icon then
-		local Wrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1 }, Tag)
-		IconLabel(Wrap, O.Icon, 13, Col:Lerp(White, 0.4), nil, "•")
-	end
-	local Lbl = New("TextLabel", {
-		LayoutOrder = 2, Size = UDim2.new(0, 0, 1, 0), AutomaticSize = AutoX, BackgroundTransparency = 1,
-		Text = O.Title or "Tag", TextColor3 = Col:Lerp(White, 0.5), TextSize = 12, Font = FontBold,
+	local TS = Stroke(Tag, ParseColor(O.BorderColor, Col), 1, 0.1)
+
+	local Wrap = New("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 9, 0.5, 0), Size = UDim2.fromOffset(13, 13),
+		BackgroundTransparency = 1, Visible = Rec.HasIcon,
 	}, Tag)
+	local Ico
+	if Rec.HasIcon then Ico = IconLabel(Wrap, O.Icon, 13, ParseColor(O.TextColor, Col:Lerp(White, 0.4)), nil, "•") end
+	local Lbl = New("TextLabel", {
+		Size = UDim2.fromOffset(20, 24), BackgroundTransparency = 1, Text = Rec.Title,
+		TextColor3 = ParseColor(O.TextColor, Col:Lerp(White, 0.5)), TextSize = 12, Font = FontBold, TextXAlignment = Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	}, Tag)
+
+	Rec.Frame, Rec.Wrap, Rec.Lbl = Tag, Wrap, Lbl
+	local function Measure()
+		local Ok, S = pcall(function() return TextService:GetTextSize(Rec.Title, 12, FontBold, Vector2.new(1000, 24)) end)
+		Rec.TextW = (Ok and S and S.X or #Rec.Title * 7) + 2
+	end
+	Measure()
+	table.insert(self._tags, Rec)
+	if self._layoutTags then self._layoutTags() end
+
+	local Win = self
 	local Obj = {}
-	function Obj:SetTitle(T) Lbl.Text = T end
-	function Obj:Destroy() Tag:Destroy() end
+	function Obj:SetTitle(T)
+		Rec.Title = tostring(T)
+		Lbl.Text = Rec.Title
+		Measure()
+		if Win._layoutTags then Win._layoutTags() end
+	end
+	function Obj:SetColor(C)
+		local NC = ParseColor(C, nil)
+		if not NC then return end
+		Tag.BackgroundColor3 = NC
+		TS.Color = NC
+		Lbl.TextColor3 = NC:Lerp(White, 0.5)
+		if Ico then Ico.ImageColor3 = NC:Lerp(White, 0.4) end
+	end
+	function Obj:Destroy()
+		local I = table.find(Win._tags, Rec)
+		if I then table.remove(Win._tags, I) end
+		Tag:Destroy()
+		if Win._layoutTags then Win._layoutTags() end
+	end
 	return Obj
 end
 
@@ -2550,52 +2606,87 @@ function Library:CreateWindow(O)
 	local CloseButton = IconButton(TopBar, "×", UDim2.new(1, -40, 0, 14), Theme.Red)
 	local MinButton = IconButton(TopBar, "–", UDim2.new(1, -72, 0, 14), Theme.Accent)
 
-	-- Tag strip (right side of the title bar). TagOffset = distance (px) from the window's right edge.
-	-- The strip is taller than the tags and has side padding, so tag outlines are fully visible.
+	-- Tag area (right side of the title bar).
+	--   TagOffset  = distance (px) from the window's right edge to the tag area (default 114, keeps clear of - and x)
+	--   TagSpacing = gap (px) between tags (default 8)
 	local TAG_EDGE = tonumber(O.TagOffset) or 114
+	local TAG_GAP = tonumber(O.TagSpacing) or 8
+	local MIN_TITLE = 110 -- the title always keeps at least this much room
 	local TagSep = New("Frame", {
 		Name = "TagSeparator", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -(TAG_EDGE - 12), 0, 16),
 		Size = UDim2.fromOffset(1, 22), BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, Visible = false,
 	}, TopBar)
-	local TagScroll = New("ScrollingFrame", {
+	local TagHost = New("Frame", {
 		Name = "Tags", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -TAG_EDGE, 0, 10), Size = UDim2.fromOffset(0, 34),
-		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 0,
-		CanvasSize = UDim2.new(0, 0, 1, 0), AutomaticCanvasSize = AutoX, ScrollingDirection = Enum.ScrollingDirection.X,
-		ElasticBehavior = Enum.ElasticBehavior.Never, ClipsDescendants = true, Active = true, Visible = false,
+		BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false,
 	}, TopBar)
-	Pad(TagScroll, 3, 0, 3, 0)
-	local TagList = List(TagScroll, 6, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
-	Win.TagFrame = TagScroll
+	Win.TagFrame = TagHost
+	Win._tags = {}
 
-	local function Relayout()
-		local Scale = math.max(RootScale.Scale, 0.01)
-		local ContentW = TagList.AbsoluteContentSize.X / Scale
-		local MaxW = math.floor(BASE_W * 0.34)
-		local HasTags = ContentW > 0
-		local W = math.min(ContentW + 6, MaxW)
-		TagScroll.Visible = HasTags
-		TagSep.Visible = HasTags
-		TagScroll.Size = UDim2.fromOffset(W, 34)
-		local Reserve = HasTags and (TAG_EDGE + W + 14) or 86
-		local Avail = math.max(BASE_W - 58 - Reserve, 40)
-		Win.TitleLabel.Size = UDim2.fromOffset(Avail, 22)
-		Win.AuthorLabel.Size = UDim2.fromOffset(Avail, 16)
+	Win._layoutTags = function()
+		local Tags = Win._tags
+		local N = #Tags
+		local Avail = math.max(BASE_W - 58 - MIN_TITLE - TAG_EDGE - 14, 60)
+
+		local function Natural(T, L)
+			local P = L == 1 and 9 or 7
+			local Ic = (L == 1 and T.HasIcon) and 18 or 0
+			return P * 2 + Ic + T.TextW, P, Ic
+		end
+
+		local ShownW = 0
+		if N > 0 then
+			-- level 1 = icon + label; level 2 = label only (tighter padding)
+			local function Total(L)
+				local S = TAG_GAP * (N - 1)
+				for _, T in ipairs(Tags) do S += (Natural(T, L)) end
+				return S
+			end
+			local L = Total(1) <= Avail and 1 or 2
+			local Gap = TAG_GAP
+			local Widths, Sum = {}, 0
+			for I, T in ipairs(Tags) do
+				Widths[I] = (Natural(T, L))
+				Sum += Widths[I]
+			end
+			if Sum + Gap * (N - 1) > Avail then
+				-- still too wide: keep a clear gap, shrink the tags evenly (labels truncate with ...)
+				Gap = math.min(Gap, 6)
+				local Room = math.max(Avail - Gap * (N - 1), 1)
+				local Scale = Room / Sum
+				for I = 1, N do Widths[I] = math.max(28, math.floor(Widths[I] * Scale)) end
+			end
+			local X, Shown = 0, 0
+			for I, T in ipairs(Tags) do
+				local _, P, Ic = Natural(T, L)
+				local W = Widths[I]
+				if X + W > Avail + 0.5 then
+					T.Frame.Visible = false -- no room at all: hide instead of overlapping
+				else
+					T.Frame.Visible = true
+					T.Frame.Size = UDim2.fromOffset(W, 24)
+					T.Frame.Position = UDim2.new(0, X, 0.5, 0)
+					T.Wrap.Visible = Ic > 0
+					T.Wrap.Position = UDim2.new(0, P, 0.5, 0)
+					T.Lbl.Position = UDim2.fromOffset(P + Ic, 0)
+					T.Lbl.Size = UDim2.fromOffset(math.max(W - 2 * P - Ic, 0), 24)
+					X += W + Gap
+					Shown += 1
+				end
+			end
+			ShownW = Shown > 0 and (X - Gap) or 0
+		end
+
+		local Has = ShownW > 0
+		TagHost.Visible = Has
+		TagSep.Visible = Has
+		TagHost.Size = UDim2.fromOffset(ShownW, 34)
+		local Reserve = Has and (TAG_EDGE + ShownW + 14) or 86
+		local TitleW = math.max(BASE_W - 58 - Reserve, 40)
+		Win.TitleLabel.Size = UDim2.fromOffset(TitleW, 22)
+		Win.AuthorLabel.Size = UDim2.fromOffset(TitleW, 16)
 	end
-	TagList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(Relayout)
-	RootScale:GetPropertyChangedSignal("Scale"):Connect(Relayout)
-	Relayout()
-
-	-- Mouse wheel scrolls the tag strip sideways
-	local TagHover = false
-	TagScroll.MouseEnter:Connect(function() TagHover = true end)
-	TagScroll.MouseLeave:Connect(function() TagHover = false end)
-	Win:Connect(UserInputService.InputChanged, function(I)
-		if not TagHover or I.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-		local ContentW = TagList.AbsoluteContentSize.X / math.max(RootScale.Scale, 0.01)
-		local MaxScroll = math.max(ContentW + 6 - TagScroll.Size.X.Offset, 0)
-		local X = math.clamp(TagScroll.CanvasPosition.X - I.Position.Z * 40, 0, MaxScroll)
-		TagScroll.CanvasPosition = Vector2.new(X, 0)
-	end)
+	Win._layoutTags()
 
 	New("Frame", {
 		Position = UDim2.fromOffset(14, 53), Size = UDim2.new(1, -28, 0, 1), BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, ZIndex = 5,
