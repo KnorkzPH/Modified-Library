@@ -13,25 +13,26 @@ local LocalPlayer = Players.LocalPlayer
 local White = Color3.new(1, 1, 1)
 
 local Theme = {
-	-- Glass palette (see the glass system below). Bg is "deep glass" #101722.
-	Bg = Color3.fromRGB(16, 23, 34),
-	Bg2 = Color3.fromRGB(21, 30, 44),
-	Card = Color3.fromRGB(26, 36, 52),
-	CardHover = Color3.fromRGB(35, 48, 68),
-	Hover = Color3.fromRGB(44, 60, 84),
-	Selected = Color3.fromRGB(38, 54, 78),
-	Stroke = Color3.fromRGB(46, 60, 80),          -- hairline separators / tracks
-	StrokeHi = Color3.fromRGB(113, 137, 168),     -- subtle border #7189A8 (always shown through a low-alpha gradient)
-	Text = Color3.fromRGB(232, 238, 247),         -- #E8EEF7
-	Muted = Color3.fromRGB(150, 165, 188),
-	Accent = Color3.fromRGB(143, 174, 213),       -- primary blue-gray #8FAED5
-	AccentDim = Color3.fromRGB(82, 108, 146),
-	OnAccent = Color3.fromRGB(12, 20, 32),
-	Frost = Color3.fromRGB(192, 205, 227),        -- frosted highlight #C0CDE3
-	Soft = Color3.fromRGB(167, 188, 218),         -- soft reflection #A7BCDA
-	IconDim = Color3.fromRGB(122, 140, 166),      -- inactive icons
-	IconHi = Color3.fromRGB(192, 205, 227),       -- active icons
-	Cyan = Color3.fromRGB(150, 196, 232),
+	-- BLACK palette: pure black surfaces, neutral grey steps, WHITE strokes / highlights / icons.
+	-- The liquid look comes from the white UIGradient + UIStroke layers (see the glass system below).
+	Bg = Color3.fromRGB(0, 0, 0),
+	Bg2 = Color3.fromRGB(8, 8, 8),
+	Card = Color3.fromRGB(14, 14, 14),
+	CardHover = Color3.fromRGB(26, 26, 26),
+	Hover = Color3.fromRGB(36, 36, 36),
+	Selected = Color3.fromRGB(30, 30, 30),
+	Stroke = Color3.fromRGB(44, 44, 44),          -- hairline separators / tracks
+	StrokeHi = Color3.fromRGB(255, 255, 255),     -- white border (always shown through a low-alpha gradient)
+	Text = Color3.fromRGB(255, 255, 255),
+	Muted = Color3.fromRGB(160, 160, 160),
+	Accent = Color3.fromRGB(255, 255, 255),       -- primary = white
+	AccentDim = Color3.fromRGB(140, 140, 140),
+	OnAccent = Color3.fromRGB(0, 0, 0),
+	Frost = Color3.fromRGB(255, 255, 255),        -- frosted highlight (white)
+	Soft = Color3.fromRGB(235, 235, 235),         -- soft reflection
+	IconDim = Color3.fromRGB(130, 130, 130),      -- inactive icons
+	IconHi = Color3.fromRGB(255, 255, 255),       -- active icons (white)
+	Cyan = Color3.fromRGB(210, 210, 210),
 	Pink = Color3.fromRGB(255, 77, 166),
 	Teal = Color3.fromRGB(20, 184, 166),
 	Blue = Color3.fromRGB(59, 130, 246),
@@ -39,7 +40,7 @@ local Theme = {
 	Green = Color3.fromRGB(74, 222, 128),
 	Red = Color3.fromRGB(248, 113, 113),
 	Amber = Color3.fromRGB(251, 191, 36),
-	NotifBg = Color3.fromRGB(14, 20, 30),
+	NotifBg = Color3.fromRGB(0, 0, 0),
 }
 Theme.Violet = Theme.Accent
 Library.Theme = Theme
@@ -140,21 +141,21 @@ local RimPresets = {
 	-- Major surfaces: frosted top edge that fades into the border tone; slight lean for a side highlight.
 	Rim = {
 		Rotation = 80,
-		Color = CSeq({ { 0, White }, { 0.55, Color3.fromRGB(196, 207, 224) }, { 1, Color3.fromRGB(150, 171, 189) } }),
+		Color = CSeq({ { 0, White }, { 0.55, Color3.fromRGB(215, 215, 215) }, { 1, Color3.fromRGB(170, 170, 170) } }),
 		Alpha = NSeq({ { 0, 0.36 }, { 0.14, 0.58 }, { 0.5, 0.84 }, { 0.82, 0.80 }, { 1, 0.62 } }),
 	},
 	-- Controls / cards: thinner, lower-contrast version of the same light direction.
 	Soft = {
 		Rotation = 90,
-		Color = CSeq({ { 0, White }, { 1, Color3.fromRGB(205, 214, 230) } }),
+		Color = CSeq({ { 0, White }, { 1, Color3.fromRGB(220, 220, 220) } }),
 		Alpha = NSeq({ { 0, 0.30 }, { 0.5, 0.58 }, { 1, 0.46 } }),
 	},
 }
 
 local DepthPresets = {
-	Panel = { Rotation = 90, Color = CSeq({ { 0, White }, { 1, Color3.fromRGB(212, 220, 234) } }) },
-	Button = { Rotation = 90, Color = CSeq({ { 0, White }, { 1, Color3.fromRGB(226, 232, 242) } }) },
-	Bar = { Rotation = 0, Color = CSeq({ { 0, Color3.fromRGB(190, 200, 216) }, { 1, White } }) },
+	Panel = { Rotation = 90, Color = CSeq({ { 0, White }, { 1, Color3.fromRGB(225, 225, 225) } }) },
+	Button = { Rotation = 90, Color = CSeq({ { 0, White }, { 1, Color3.fromRGB(235, 235, 235) } }) },
+	Bar = { Rotation = 0, Color = CSeq({ { 0, Color3.fromRGB(205, 205, 205) }, { 1, White } }) },
 }
 
 -- Reflection overlay: soft icy tint that is strongest at the top and fully gone before the middle.
@@ -756,7 +757,7 @@ local function MakeParticles(Parent, Count)
 end
 
 local OrbDefaultImage = "rbxassetid://6014261993"
-local OrbPurple = Color3.fromRGB(96, 128, 184)
+local OrbPurple = Color3.fromRGB(90, 90, 90)
 local OrbRegistry = {}
 Library.OrbImages = {}
 Library.OrbImageTransparency = nil
@@ -1230,7 +1231,7 @@ function Library:Notify(O)
 	if O.Content then
 		New("TextLabel", {
 			LayoutOrder = 2, Size = UDim2.new(1, 0, 1, -24), BackgroundTransparency = 1, RichText = true,
-			Text = O.Content, TextColor3 = Color3.fromRGB(206, 216, 232), TextSize = 13, FontFace = FontMed, TextWrapped = true,
+			Text = O.Content, TextColor3 = Color3.fromRGB(215, 215, 215), TextSize = 13, FontFace = FontMed, TextWrapped = true,
 			TextTruncate = Enum.TextTruncate.AtEnd, TextXAlignment = Left, TextYAlignment = Enum.TextYAlignment.Top,
 			TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
 		}, Column)
@@ -1358,7 +1359,7 @@ function Elements:_Card(O, RightW, Clickable, Standalone)
 	local TextX, Ico = 0, nil
 	if O.Icon and O.Icon ~= "" then
 		local IS = O.IconSize or 20
-		Ico = IconLabel(Head, O.Icon, IS, Theme.Accent, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
+		Ico = IconLabel(Head, O.Icon, IS, ParseColor(O.IconColor, Theme.IconHi), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
 		TextX = IS + 10
 	end
 
@@ -1379,8 +1380,16 @@ function Elements:_Card(O, RightW, Clickable, Standalone)
 		}, Column)
 	end
 
-	Root.MouseEnter:Connect(function() Tween(HoverBg, 0.12, { BackgroundTransparency = 0.5 }) end)
-	Root.MouseLeave:Connect(function() Tween(HoverBg, 0.15, { BackgroundTransparency = 1 }) end)
+	-- icon: white (or the IconColor hex you set); slightly softer at rest, full strength on hover
+	if Ico then Ico.ImageTransparency = 0.2 end
+	Root.MouseEnter:Connect(function()
+		Tween(HoverBg, 0.12, { BackgroundTransparency = 0.5 })
+		if Ico then Tween(Ico, 0.12, { ImageTransparency = 0 }) end
+	end)
+	Root.MouseLeave:Connect(function()
+		Tween(HoverBg, 0.15, { BackgroundTransparency = 1 })
+		if Ico then Tween(Ico, 0.15, { ImageTransparency = 0.2 }) end
+	end)
 
 	return {
 		Root = Root, Card = Card, Head = Head, Title = Title, Desc = Desc, Icon = Ico, Group = G, HoverBg = HoverBg,
@@ -2444,16 +2453,18 @@ function Window:_MakeTab(O, ParentFrame)
 	Corner(Bar, 2)
 
 	local IconRight = O.IconAlign == "Right"
+	local TabIconCol = ParseColor(O.IconColor, Theme.IconHi)      -- white, or the IconColor hex you set
 	local Ico, IcoFB
 	local TextL = 14
 	if O.Icon then
 		if IconRight then
-			Ico, IcoFB = IconLabel(Btn, O.Icon, 17, Theme.IconDim, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0.5, 0), ZIndex = 2 }, "•")
+			Ico, IcoFB = IconLabel(Btn, O.Icon, 17, TabIconCol, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0.5, 0), ZIndex = 2 }, "•")
 		else
-			Ico, IcoFB = IconLabel(Btn, O.Icon, 17, Theme.IconDim, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), ZIndex = 2 }, "•")
+			Ico, IcoFB = IconLabel(Btn, O.Icon, 17, TabIconCol, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), ZIndex = 2 }, "•")
 			TextL = 38
 		end
 	end
+	if Ico then Ico.ImageTransparency = 0.4 end
 	local LockIco, LockFB = IconLabel(Btn, "lucide:lock", 14, Theme.Amber, {
 		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0.5, 0), Visible = false, ZIndex = 2,
 	}, "•")
@@ -2488,7 +2499,7 @@ function Window:_MakeTab(O, ParentFrame)
 		Tween(ActStroke, 0.2, { Transparency = On and 0 or 1 })
 		Tween(Bar, 0.2, { BackgroundTransparency = On and 0 or 1 })
 		Tween(Lbl, 0.2, { TextColor3 = On and Theme.Text or Theme.Muted })
-		if Ico then Tween(Ico, 0.2, { ImageColor3 = On and Theme.IconHi or Theme.IconDim }) end
+		if Ico then Tween(Ico, 0.2, { ImageTransparency = On and 0 or 0.4 }) end
 		if On then
 			Page.Visible = true
 			if not Instant and WinRef._moving ~= false then
@@ -2533,12 +2544,14 @@ function Window:_MakeTab(O, ParentFrame)
 	Btn.MouseEnter:Connect(function()
 		if Tab.Locked or Selected then return end
 		Tween(Lbl, 0.12, { TextColor3 = Theme.Text })
+		if Ico then Tween(Ico, 0.12, { ImageTransparency = 0 }) end
 		Tween(ActiveFill, 0.12, { BackgroundTransparency = Library.Transparent and 0.75 or 0.45 })
 		Tween(ActStroke, 0.12, { Transparency = 0.5 })
 	end)
 	Btn.MouseLeave:Connect(function()
 		if Tab.Locked or Selected then return end
 		Tween(Lbl, 0.12, { TextColor3 = Theme.Muted })
+		if Ico then Tween(Ico, 0.12, { ImageTransparency = 0.4 }) end
 		Tween(ActiveFill, 0.12, { BackgroundTransparency = 1 })
 		Tween(ActStroke, 0.12, { Transparency = 1 })
 	end)
@@ -2630,7 +2643,7 @@ function Window:OpenButton(O)
 		self._bubbleDraggable = O.Draggable and true or false
 	end
 	if O.Icon ~= nil and O.Icon ~= "" then
-		SetBadgeIcon(self.BubbleImg, self.BubbleFB, O.Icon, Theme.OnAccent, 24, UDim2.fromOffset(24, 24))
+		SetBadgeIcon(self.BubbleImg, self.BubbleFB, O.Icon, White, 24, UDim2.fromOffset(24, 24))
 	end
 	return self
 end
@@ -2638,7 +2651,7 @@ Window.EditOpenButton = Window.OpenButton
 
 function Window:SetIcon(Icon)
 	if Icon == nil or Icon == "" then return end
-	SetBadgeIcon(self.LogoImg, self.LogoFB, Icon, Theme.OnAccent, 9, UDim2.fromScale(0.6, 0.6))
+	SetBadgeIcon(self.LogoImg, self.LogoFB, Icon, White, 9, UDim2.fromScale(0.6, 0.6))
 	if self.SplashImg and self.SplashImg.Parent then
 		SetBadgeIcon(self.SplashImg, self.SplashFB, Icon, self.SplashIconColor or White, 18, UDim2.fromScale(0.6, 0.6))
 	end
@@ -3170,21 +3183,21 @@ function Library:CreateWindow(O)
 
 	local TopBar = New("Frame", { Name = "TopBar", Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 1, ZIndex = 5 }, Main)
 	local Logo = New("Frame", {
-		Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(14, 10), BackgroundColor3 = Theme.Accent, BorderSizePixel = 0,
+		Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(14, 10), BackgroundColor3 = Theme.Card, BorderSizePixel = 0,
 	}, TopBar)
 	Corner(Logo, 9)
 	FX.Depth(Logo, "Button")
-	Stroke(Logo, Theme.Accent:Lerp(White, 0.4), 1, 0.4, "Soft")
+	Stroke(Logo, White, 1, 0.35, "Soft")
 	local LogoImg = New("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.6, 0.6),
-		BackgroundTransparency = 1, ImageColor3 = Theme.OnAccent, ScaleType = Enum.ScaleType.Fit,
+		BackgroundTransparency = 1, ImageColor3 = White, ScaleType = Enum.ScaleType.Fit,
 	}, Logo)
 	local LogoFB = New("TextLabel", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = string.upper(string.sub(PlainTitle, 1, 1)),
-		TextColor3 = Theme.OnAccent, TextSize = 16, FontFace = FontBlack,
+		TextColor3 = White, TextSize = 16, FontFace = FontBlack,
 	}, Logo)
 	Win.LogoImg, Win.LogoFB = LogoImg, LogoFB
-	SetBadgeIcon(LogoImg, LogoFB, O.Icon or "layout-grid", Theme.OnAccent, 9, UDim2.fromScale(0.6, 0.6))
+	SetBadgeIcon(LogoImg, LogoFB, O.Icon or "layout-grid", White, 9, UDim2.fromScale(0.6, 0.6))
 
 	Win.TitleLabel = New("TextLabel", {
 		Position = UDim2.fromOffset(58, 8), Size = UDim2.fromOffset(BASE_W - 250, 22), BackgroundTransparency = 1, RichText = true,
@@ -3358,22 +3371,22 @@ function Library:CreateWindow(O)
 	Win.Host = { Modal = Modal, Dim = Dim }
 
 	local Bubble = New("Frame", {
-		Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -64, 0.5, -24), BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, Visible = false,
+		Size = UDim2.fromOffset(48, 48), Position = UDim2.new(1, -64, 0.5, -24), BackgroundColor3 = Theme.Card, BorderSizePixel = 0, Visible = false,
 		Active = true,
 	}, Gui)
 	Corner(Bubble, 16)
 	FX.Depth(Bubble, "Button")
-	Stroke(Bubble, Theme.Accent:Lerp(White, 0.4), 1.5, 0.3, "Soft")
+	Stroke(Bubble, White, 1.5, 0.3, "Soft")
 	local BubbleButton = New("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "" }, Bubble)
 	local BubbleImg = New("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(24, 24),
-		BackgroundTransparency = 1, ImageColor3 = Theme.OnAccent,
+		BackgroundTransparency = 1, ImageColor3 = White,
 	}, Bubble)
 	local BubbleFB = New("TextLabel", {
-		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "≡", TextColor3 = Theme.OnAccent, TextSize = 20, FontFace = FontBold,
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "≡", TextColor3 = White, TextSize = 20, FontFace = FontBold,
 	}, Bubble)
 	Win.Bubble, Win.BubbleImg, Win.BubbleFB = Bubble, BubbleImg, BubbleFB
-	SetBadgeIcon(BubbleImg, BubbleFB, O.Icon or "layout-grid", Theme.OnAccent, 24, UDim2.fromOffset(24, 24))
+	SetBadgeIcon(BubbleImg, BubbleFB, O.Icon or "layout-grid", White, 24, UDim2.fromOffset(24, 24))
 	if type(O.OpenButton) == "table" then Win:OpenButton(O.OpenButton) end
 
 	MakeDraggable(Win, TopBar, Root, function() return RootScale.Scale end, function() return not Modal.Visible end)
