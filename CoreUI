@@ -271,6 +271,8 @@ local function SetLucide(Label, Icon, Fallback)
 	local Kind, Val = ParseIcon(Icon)
 	if not Kind then return end
 	if Kind == "asset" then
+		Label.ImageRectSize = Vector2.new(0, 0)
+		Label.ImageRectOffset = Vector2.new(0, 0)
 		Label.Image = Val
 		if Fallback then Fallback.Visible = false end
 		return
@@ -297,6 +299,33 @@ Library.Creator = {
 	end,
 }
 function Library:SetIcon(Label, Icon, Fallback) SetLucide(Label, Icon, Fallback) end
+
+-- Badge icons (main logo, splash logo, open button).
+--   Lucide name  -> small, tinted with `Tint` (Theme.OnAccent), sits inside the badge
+--   Custom image -> rbxassetid / "0202020" / rbxthumb://type=Asset&id=ID&w=768&h=432 / http
+--                   fills the whole badge in its real colours (no tint), cropped to the badge shape
+local function SetBadgeIcon(Img, Fallback, Icon, Tint, Radius, LucideSize)
+	local Kind = ParseIcon(Icon)
+	if not Kind then return end
+	local Round = Img:FindFirstChild("BadgeCorner")
+	if not Round then
+		Round = New("UICorner", { Name = "BadgeCorner", CornerRadius = UDim.new(0, 0) }, Img)
+	end
+	if Kind == "asset" then
+		Img.ImageColor3 = White
+		Img.Size = UDim2.fromScale(1, 1)
+		Img.ScaleType = Enum.ScaleType.Crop
+		Round.CornerRadius = UDim.new(0, Radius or 0)
+	else
+		Img.ImageColor3 = Tint or Theme.OnAccent
+		Img.Size = LucideSize or UDim2.fromScale(0.6, 0.6)
+		Img.ScaleType = Enum.ScaleType.Fit
+		Round.CornerRadius = UDim.new(0, 0)
+		Img.Image = ""
+		if Fallback then Fallback.Visible = true end
+	end
+	SetLucide(Img, Icon, Fallback)
+end
 
 local function IconLabel(Parent, Icon, Size, Color, Props, FallbackText)
 	local P = {
@@ -2095,13 +2124,27 @@ function Window:OnClose(Fn) self._onClose = Fn end
 function Window:OnOpen(Fn) self._onOpen = Fn end
 function Window:OnDestroy(Fn) self._onDestroy = Fn end
 
-function Window:EditOpenButton(O)
+-- Window:OpenButton({ Icon = "lucide-name" | "0202020" | "rbxthumb://type=Asset&id=ID&w=768&h=432", Enabled = true, Draggable = true })
+function Window:OpenButton(O)
 	O = O or {}
 	if O.Enabled ~= nil then
-		self._openButton = O.Enabled
-		if self.Hidden then self.Bubble.Visible = O.Enabled end
+		self._openButton = O.Enabled and true or false
+		if self.Hidden then self.Bubble.Visible = self._openButton end
 	end
-	if O.Icon then SetLucide(self.BubbleImg, O.Icon, self.BubbleFB) end
+	if O.Draggable ~= nil then
+		self._bubbleDraggable = O.Draggable and true or false
+	end
+	if O.Icon ~= nil and O.Icon ~= "" then
+		SetBadgeIcon(self.BubbleImg, self.BubbleFB, O.Icon, Theme.OnAccent, 24, UDim2.fromOffset(24, 24))
+	end
+	return self
+end
+Window.EditOpenButton = Window.OpenButton
+
+-- Change the main logo (top-left "T" badge) at runtime. Same icon formats as OpenButton.
+function Window:SetIcon(Icon)
+	if Icon == nil or Icon == "" then return end
+	SetBadgeIcon(self.LogoImg, self.LogoFB, Icon, Theme.OnAccent, 9, UDim2.fromScale(0.6, 0.6))
 end
 
 function Window:SetTitle(T)
@@ -2520,7 +2563,7 @@ function Library:CreateWindow(O)
 
 	local Win = setmetatable({
 		Connections = {}, Tabs = {}, Destroyed = false, Hidden = false, _side = 0, _tagN = 0, _Elements = {}, FlagElements = {},
-		Folder = FolderName, ToggleKey = O.ToggleKey or Enum.KeyCode.RightShift, _openButton = true,
+		Folder = FolderName, ToggleKey = O.ToggleKey or Enum.KeyCode.RightShift, _openButton = true, _bubbleDraggable = true,
 		_moving = O.MovingAnimation ~= false, _particles = O.Particles ~= false,
 	}, Window)
 
@@ -2590,7 +2633,8 @@ function Library:CreateWindow(O)
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = string.upper(string.sub(PlainTitle, 1, 1)),
 		TextColor3 = Theme.OnAccent, TextSize = 16, Font = FontBlack,
 	}, Logo)
-	SetLucide(LogoImg, O.Icon or "layout-grid", LogoFB)
+	Win.LogoImg, Win.LogoFB = LogoImg, LogoFB
+	SetBadgeIcon(LogoImg, LogoFB, O.Icon or "layout-grid", Theme.OnAccent, 9, UDim2.fromScale(0.6, 0.6))
 
 	Win.TitleLabel = New("TextLabel", {
 		Position = UDim2.fromOffset(58, 8), Size = UDim2.fromOffset(BASE_W - 250, 22), BackgroundTransparency = 1, RichText = true,
@@ -2762,12 +2806,13 @@ function Library:CreateWindow(O)
 	local BubbleFB = New("TextLabel", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "≡", TextColor3 = Theme.OnAccent, TextSize = 20, Font = FontBold,
 	}, Bubble)
-	SetLucide(BubbleImg, O.Icon or "layout-grid", BubbleFB)
 	Win.Bubble, Win.BubbleImg, Win.BubbleFB = Bubble, BubbleImg, BubbleFB
+	SetBadgeIcon(BubbleImg, BubbleFB, O.Icon or "layout-grid", Theme.OnAccent, 24, UDim2.fromOffset(24, 24))
+	if type(O.OpenButton) == "table" then Win:OpenButton(O.OpenButton) end
 
 	MakeDraggable(Win, TopBar, Root, function() return RootScale.Scale end, function() return not Modal.Visible end)
 	local BubbleMoved = false
-	MakeDraggable(Win, BubbleButton, Bubble, function() return 1 end, nil, function() BubbleMoved = true end)
+	MakeDraggable(Win, BubbleButton, Bubble, function() return 1 end, function() return Win._bubbleDraggable end, function() BubbleMoved = true end)
 
 	CloseButton.MouseButton1Click:Connect(function() Win:Destroy() end)
 	MinButton.MouseButton1Click:Connect(function() Win:Close() end)
@@ -2826,7 +2871,7 @@ function Library:CreateWindow(O)
 			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = string.upper(string.sub(PlainTitle, 1, 1)),
 			TextColor3 = Theme.OnAccent, TextSize = 30, Font = FontBlack, ZIndex = 3,
 		}, SLogo)
-		SetLucide(SImg, O.Icon or "layout-grid", SFB)
+		SetBadgeIcon(SImg, SFB, O.Icon or "layout-grid", Theme.OnAccent, 18, UDim2.fromScale(0.6, 0.6))
 		local STitleText = string.upper(PlainTitle)
 		local STitle = New("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 20), Size = UDim2.fromOffset(400, 32),
