@@ -11,24 +11,26 @@ local LocalPlayer = Players.LocalPlayer
 
 local White = Color3.new(1, 1, 1)
 
--- Brighter text + stronger borders so everything is easier to read (low vision friendly)
+-- Muted palette: neutral greys + one soft accent, thin outlines, subtle hover
 local Theme = {
-	Bg = Color3.fromRGB(9, 9, 16),
-	Bg2 = Color3.fromRGB(18, 14, 34),
-	Card = Color3.fromRGB(19, 18, 32),
-	CardHover = Color3.fromRGB(27, 24, 46),
-	Stroke = Color3.fromRGB(66, 63, 100),
-	Text = Color3.fromRGB(252, 251, 255),
-	Muted = Color3.fromRGB(208, 206, 232),
-	Violet = Color3.fromRGB(139, 92, 255),
-	Cyan = Color3.fromRGB(34, 211, 238),
-	Pink = Color3.fromRGB(255, 77, 166),
-	Teal = Color3.fromRGB(20, 184, 166),
-	Blue = Color3.fromRGB(59, 130, 246),
-	Green = Color3.fromRGB(74, 222, 128),
-	Red = Color3.fromRGB(248, 113, 113),
-	Amber = Color3.fromRGB(251, 191, 36),
-	NotifBg = Color3.fromRGB(12, 11, 22),
+	Bg = Color3.fromRGB(13, 13, 15),
+	Bg2 = Color3.fromRGB(19, 19, 22),
+	Card = Color3.fromRGB(24, 24, 28),
+	CardHover = Color3.fromRGB(32, 32, 37),
+	Stroke = Color3.fromRGB(50, 50, 58),
+	StrokeHover = Color3.fromRGB(84, 86, 98),
+	Text = Color3.fromRGB(238, 238, 243),
+	Muted = Color3.fromRGB(158, 161, 172),
+	-- one calm accent (Violet/Cyan/Blue are kept as names but are all close shades of it)
+	Violet = Color3.fromRGB(98, 138, 232),
+	Cyan = Color3.fromRGB(128, 168, 232),
+	Pink = Color3.fromRGB(205, 128, 156),
+	Teal = Color3.fromRGB(70, 170, 160),
+	Blue = Color3.fromRGB(84, 122, 214),
+	Green = Color3.fromRGB(96, 192, 132),
+	Red = Color3.fromRGB(224, 108, 108),
+	Amber = Color3.fromRGB(220, 172, 76),
+	NotifBg = Color3.fromRGB(16, 16, 19),
 }
 Library.Theme = Theme
 
@@ -294,13 +296,13 @@ local function GradButton(Parent, Text, Size, Position, ColA, ColB, TextSize)
 	local Holder = New("Frame", { Size = Size, Position = Position, BackgroundColor3 = White, BorderSizePixel = 0 }, Parent)
 	Corner(Holder, 10)
 	local G = Gradient(Holder, ColA, ColB, 20)
-	local S = Stroke(Holder, White, 1, 0.85)
+	local S = Stroke(Holder, White, 1, 0.8)
 	local Button = New("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, AutoButtonColor = false, Text = Text,
 		TextColor3 = White, TextSize = TextSize or 13, Font = FontBold,
 	}, Holder)
-	Button.MouseEnter:Connect(function() Tween(S, 0.18, { Transparency = 0.3 }) Tween(G, 0.45, { Rotation = 200 }) end)
-	Button.MouseLeave:Connect(function() Tween(S, 0.18, { Transparency = 0.85 }) Tween(G, 0.45, { Rotation = 20 }) end)
+	Button.MouseEnter:Connect(function() Tween(S, 0.15, { Transparency = 0.45 }) end)
+	Button.MouseLeave:Connect(function() Tween(S, 0.15, { Transparency = 0.8 }) end)
 	return Button, Holder
 end
 
@@ -310,9 +312,15 @@ local function IconButton(Parent, Text, Position, HoverColor)
 		AutoButtonColor = false, Text = Text, TextColor3 = Theme.Muted, TextSize = 18, Font = FontBold,
 	}, Parent)
 	Corner(B, 8)
-	Stroke(B, Theme.Stroke, 1)
-	B.MouseEnter:Connect(function() Tween(B, 0.15, { BackgroundColor3 = HoverColor, TextColor3 = Theme.Text }) end)
-	B.MouseLeave:Connect(function() Tween(B, 0.15, { BackgroundColor3 = Theme.Card, TextColor3 = Theme.Muted }) end)
+	local BS = Stroke(B, Theme.Stroke, 1)
+	B.MouseEnter:Connect(function()
+		Tween(B, 0.15, { BackgroundColor3 = Theme.Card:Lerp(HoverColor, 0.3), TextColor3 = Theme.Text })
+		Tween(BS, 0.15, { Color = HoverColor })
+	end)
+	B.MouseLeave:Connect(function()
+		Tween(B, 0.15, { BackgroundColor3 = Theme.Card, TextColor3 = Theme.Muted })
+		Tween(BS, 0.15, { Color = Theme.Stroke })
+	end)
 	return B
 end
 
@@ -446,11 +454,11 @@ local function BuildDialog(Host, O)
 
 		Box = New("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 360, 0, 0),
-			AutomaticSize = AutoY, BackgroundColor3 = Color3.fromRGB(24, 22, 40), BorderSizePixel = 0, ZIndex = 2, Active = true,
+			AutomaticSize = AutoY, BackgroundColor3 = Theme.Card, BorderSizePixel = 0, ZIndex = 2, Active = true,
 		}, Host.Modal)
 		Bg(Box, 0)
 		Corner(Box, 14)
-		Gradient(Stroke(Box, White, 2, 0.05), Theme.Violet, Theme.Cyan, 45)
+		Stroke(Box, Theme.StrokeHover, 1)
 		Pad(Box, 18, 16, 18, 16)
 		List(Box, 12)
 		Sc = New("UIScale", { Scale = 0.9 }, Box)
@@ -470,7 +478,7 @@ local function BuildDialog(Host, O)
 		if Body then
 			New("TextLabel", {
 				LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-				Text = Body, TextColor3 = Color3.fromRGB(245, 244, 255), TextSize = 14, Font = FontMed, TextWrapped = true,
+				Text = Body, TextColor3 = Theme.Text, TextSize = 14, Font = FontMed, TextWrapped = true,
 				TextXAlignment = Left, TextYAlignment = Enum.TextYAlignment.Top,
 			}, Box)
 		end
@@ -490,12 +498,16 @@ local function BuildDialog(Host, O)
 					Holder.LayoutOrder = I
 				else
 					Btn = New("TextButton", {
-						LayoutOrder = I, Size = Size, BackgroundColor3 = Color3.fromRGB(36, 33, 60),
+						LayoutOrder = I, Size = Size, BackgroundColor3 = Theme.CardHover,
 						BackgroundTransparency = Variant == "Tertiary" and 1 or 0, BorderSizePixel = 0, AutoButtonColor = false,
-						Text = B.Title or "Button", TextColor3 = Color3.fromRGB(235, 232, 255), TextSize = 13, Font = FontBold,
+						Text = B.Title or "Button", TextColor3 = Theme.Text, TextSize = 13, Font = FontBold,
 					}, Row)
 					Corner(Btn, 10)
-					if Variant ~= "Tertiary" then Stroke(Btn, Theme.Stroke, 1.2) end
+					if Variant ~= "Tertiary" then
+						local BS = Stroke(Btn, Theme.Stroke, 1)
+						Btn.MouseEnter:Connect(function() Tween(BS, 0.15, { Color = Theme.StrokeHover }) end)
+						Btn.MouseLeave:Connect(function() Tween(BS, 0.15, { Color = Theme.Stroke }) end)
+					end
 				end
 				Btn.MouseButton1Click:Connect(function()
 					D:Close()
@@ -751,7 +763,7 @@ function Elements:_Card(O, RightW, Clickable)
 	local Base = { Bg = Theme.Card, Stroke = Theme.Stroke }
 	Card.MouseEnter:Connect(function()
 		Tween(Card, 0.15, { BackgroundColor3 = Base.Bg:Lerp(White, 0.04) })
-		Tween(CS, 0.15, { Color = Theme.Violet })
+		Tween(CS, 0.15, { Color = Base.Stroke == Theme.Stroke and Theme.StrokeHover or Base.Stroke:Lerp(White, 0.25) })
 	end)
 	Card.MouseLeave:Connect(function()
 		Tween(Card, 0.15, { BackgroundColor3 = Base.Bg })
@@ -816,7 +828,7 @@ function Elements:Toggle(O)
 			BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0,
 		}, C.Head)
 		Corner(Box, 6)
-		local BS = Stroke(Box, Theme.Stroke, 1.5)
+		local BS = Stroke(Box, Theme.StrokeHover, 1.2)
 		local Fill = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 1, BorderSizePixel = 0 }, Box)
 		Corner(Fill, 6)
 		Gradient(Fill, Theme.Violet, Theme.Cyan, 45)
@@ -827,24 +839,27 @@ function Elements:Toggle(O)
 			Tween(Fill, 0.15, { BackgroundTransparency = V and 0 or 1 })
 			Tween(Chk, 0.15, { ImageTransparency = V and 0 or 1 })
 			Tween(ChkFB, 0.15, { TextTransparency = V and 0 or 1 })
-			Tween(BS, 0.15, { Color = V and Theme.Violet or Theme.Stroke })
+			Tween(BS, 0.15, { Color = V and Theme.Violet or Theme.StrokeHover })
 		end
 	else
 		local Track = New("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(42, 22),
-			BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0,
+			BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0,
 		}, C.Head)
 		Corner(Track, 11)
+		local TS = Stroke(Track, Theme.StrokeHover, 1.2)
 		local Fill = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 1, BorderSizePixel = 0 }, Track)
 		Corner(Fill, 11)
 		Gradient(Fill, Theme.Violet, Theme.Cyan, 0)
 		local Knob = New("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(16, 16),
-			BackgroundColor3 = White, BorderSizePixel = 0, ZIndex = 2,
+			BackgroundColor3 = Theme.Muted, BorderSizePixel = 0, ZIndex = 2,
 		}, Track)
 		Corner(Knob, 8)
 		Render = function(V)
 			Tween(Fill, 0.2, { BackgroundTransparency = V and 0 or 1 })
+			Tween(TS, 0.2, { Color = V and Theme.Violet or Theme.StrokeHover })
+			Tween(Knob, 0.2, { BackgroundColor3 = V and White or Theme.Muted })
 			Tween(Knob, 0.2, { Position = V and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 3, 0.5, 0) }, Enum.EasingStyle.Back)
 		end
 	end
@@ -914,7 +929,7 @@ function Elements:Slider(O)
 		BackgroundColor3 = White, BorderSizePixel = 0, ZIndex = 2,
 	}, Track)
 	Corner(Knob, 7)
-	Stroke(Knob, Theme.Violet, 2)
+	Stroke(Knob, Theme.Violet, 1.5)
 
 	local Decimals = #(tostring(Step):match("%.(%d+)") or "")
 	function Obj:Set(Val, Silent)
@@ -975,7 +990,7 @@ function Elements:Dropdown(O)
 
 	Pill.MouseEnter:Connect(function()
 		if Open then return end
-		Tween(PillStroke, 0.15, { Color = Theme.Violet })
+		Tween(PillStroke, 0.15, { Color = Theme.StrokeHover })
 		Tween(Pill, 0.15, { BackgroundColor3 = Theme.CardHover })
 	end)
 	Pill.MouseLeave:Connect(function()
@@ -990,7 +1005,7 @@ function Elements:Dropdown(O)
 	}, C.Card)
 	Bg(Holder, 0)
 	Corner(Holder, 8)
-	Stroke(Holder, Theme.Violet, 1, 0.55)
+	Stroke(Holder, Theme.Stroke, 1)
 	local Scroll = New("ScrollingFrame", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2,
 		ScrollBarImageColor3 = Theme.Violet, CanvasSize = UDim2.new(), AutomaticCanvasSize = AutoY,
@@ -1508,7 +1523,9 @@ function Elements:Paragraph(O)
 				BorderSizePixel = 0, AutoButtonColor = false, Text = "",
 			}, Row)
 			Corner(Btn, 8)
-			Stroke(Btn, Theme.Stroke, 1)
+			local BS = Stroke(Btn, Theme.Stroke, 1)
+			Btn.MouseEnter:Connect(function() Tween(BS, 0.15, { Color = Theme.StrokeHover }) end)
+			Btn.MouseLeave:Connect(function() Tween(BS, 0.15, { Color = Theme.Stroke }) end)
 			Pad(Btn, 10, 0, 10, 0)
 			local Inner = New("Frame", { Size = UDim2.new(0, 0, 1, 0), AutomaticSize = AutoX, BackgroundTransparency = 1 }, Btn)
 			List(Inner, 6, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
@@ -1551,7 +1568,9 @@ function Elements:Code(O)
 		TextSize = 11, Font = FontBold,
 	}, C.Head)
 	Corner(Copy, 8)
-	Stroke(Copy, Theme.Stroke, 1)
+	local CopyS = Stroke(Copy, Theme.Stroke, 1)
+	Copy.MouseEnter:Connect(function() Tween(CopyS, 0.15, { Color = Theme.StrokeHover }) end)
+	Copy.MouseLeave:Connect(function() Tween(CopyS, 0.15, { Color = Theme.Stroke }) end)
 	Copy.MouseButton1Click:Connect(function()
 		CopyText(Obj.Value)
 		Copy.Text = "COPIED"
@@ -1893,15 +1912,16 @@ function Window:Tag(O)
 	local Col = O.Color or Theme.Violet
 	local Tag = New("Frame", {
 		Name = "Tag", LayoutOrder = self._tagN, Size = UDim2.fromOffset(0, 26), AutomaticSize = AutoX,
-		BackgroundColor3 = Col, BackgroundTransparency = O.Transparency or 0.72, BorderSizePixel = 0,
+		BackgroundColor3 = Theme.Card:Lerp(Col, 0.16), BackgroundTransparency = O.Transparency or 0, BorderSizePixel = 0,
+		ZIndex = 7,
 	}, self.TagFrame)
 	Corner(Tag, math.clamp(O.Radius or 8, 0, 13))
-	Stroke(Tag, Col, 1.2, 0.3)
+	Stroke(Tag, Col:Lerp(Theme.Card, 0.35), 1, 0)
 	Pad(Tag, 9, 0, 9, 0)
 	List(Tag, 5, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
 	if O.Icon then
 		local Wrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1 }, Tag)
-		IconLabel(Wrap, O.Icon, 14, Col:Lerp(White, 0.4), nil, "•")
+		IconLabel(Wrap, O.Icon, 14, Col:Lerp(White, 0.35), nil, "•")
 	end
 	local Lbl = New("TextLabel", {
 		LayoutOrder = 2, Size = UDim2.new(0, 0, 1, 0), AutomaticSize = AutoX, BackgroundTransparency = 1,
@@ -2200,11 +2220,13 @@ local function BuildKeyGate(Win, KS)
 
 	if KS.URL then
 		local Get = New("TextButton", {
-			LayoutOrder = 1, Size = UDim2.new(0.5, -4, 1, 0), BackgroundColor3 = Color3.fromRGB(36, 33, 60), BorderSizePixel = 0,
+			LayoutOrder = 1, Size = UDim2.new(0.5, -4, 1, 0), BackgroundColor3 = Theme.CardHover, BorderSizePixel = 0,
 			AutoButtonColor = false, Text = "GET KEY", TextColor3 = Theme.Text, TextSize = 13, Font = FontBold, ZIndex = 92,
 		}, Row)
 		Corner(Get, 10)
-		Stroke(Get, Theme.Stroke, 1.2)
+		local GetS = Stroke(Get, Theme.Stroke, 1)
+		Get.MouseEnter:Connect(function() Tween(GetS, 0.15, { Color = Theme.StrokeHover }) end)
+		Get.MouseLeave:Connect(function() Tween(GetS, 0.15, { Color = Theme.Stroke }) end)
 		Get.MouseButton1Click:Connect(function()
 			local Ok = CopyText(KS.URL)
 			StatusL.Text = Ok and "Key link copied" or "Copy failed"
@@ -2246,7 +2268,7 @@ function Library:CreateWindow(O)
 	local Win = setmetatable({
 		Connections = {}, Tabs = {}, Destroyed = false, Hidden = false, _side = 0, _tagN = 0, _Elements = {}, FlagElements = {},
 		Folder = FolderName, ToggleKey = O.ToggleKey or Enum.KeyCode.RightShift, _openButton = true,
-		_moving = O.MovingAnimation ~= false, _particles = O.Particles ~= false,
+		_moving = O.MovingAnimation ~= false, _particles = O.Particles == true,
 	}, Window)
 
 	pcall(function()
@@ -2285,7 +2307,7 @@ function Library:CreateWindow(O)
 
 	New("ImageLabel", {
 		Name = "Glow", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, 70, 1, 70), Image = "rbxassetid://6014261993", ImageColor3 = Theme.Violet, ImageTransparency = 0.55,
+		Size = UDim2.new(1, 70, 1, 70), Image = "rbxassetid://6014261993", ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.6,
 		ScaleType = Enum.ScaleType.Slice, SliceCenter = Rect.new(49, 49, 450, 450), ZIndex = 1,
 	}, Root)
 
@@ -2296,19 +2318,19 @@ function Library:CreateWindow(O)
 	Bg(Main, O.Transparent and 0.12 or 0)
 	Corner(Main, MAIN_RADIUS)
 	Gradient(Main, Theme.Bg2, Theme.Bg, 135)
-	local BorderStroke = Stroke(Main, White, 1.5, 0.1)
+	local BorderStroke = Stroke(Main, White, 1, 0)
 	local BorderGrad = New("UIGradient", {
 		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Theme.Violet), ColorSequenceKeypoint.new(0.33, Theme.Cyan),
-			ColorSequenceKeypoint.new(0.66, Theme.Pink), ColorSequenceKeypoint.new(1, Theme.Violet),
+			ColorSequenceKeypoint.new(0, Theme.StrokeHover), ColorSequenceKeypoint.new(0.5, Theme.Stroke),
+			ColorSequenceKeypoint.new(1, Theme.StrokeHover),
 		}),
 	}, BorderStroke)
 	Win.Main = Main
 
 	local Background = New("CanvasGroup", { Name = "Background", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, Main)
 	Corner(Background, MAIN_RADIUS)
-	local Orb1 = Orb(Theme.Violet, 0.12, 0.1, 340, 0.72, Background)
-	local Orb2 = Orb(Theme.Cyan, 0.95, 0.95, 320, 0.72, Background)
+	local Orb1 = Orb(Theme.Violet, 0.12, 0.1, 340, 0.95, Background)
+	local Orb2 = Orb(Theme.Cyan, 0.95, 0.95, 320, 0.95, Background)
 	local Particles = MakeParticles(Background, 14)
 	Win._applyParticles = function()
 		for _, P in ipairs(Particles) do P.Obj.Visible = Win._particles end
@@ -2321,7 +2343,7 @@ function Library:CreateWindow(O)
 	}, TopBar)
 	Corner(Logo, 10)
 	local LogoGrad = Gradient(Logo, Theme.Violet, Theme.Cyan, 45)
-	Stroke(Logo, White, 1, 0.75)
+	Stroke(Logo, White, 1, 0.85)
 	local LogoImg = New("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.62, 0.62),
 		BackgroundTransparency = 1, ImageColor3 = White, ScaleType = Enum.ScaleType.Fit,
@@ -2349,22 +2371,25 @@ function Library:CreateWindow(O)
 	-- Tag strip: scrollable, right side of the title bar, separated from the – and × buttons.
 	-- TagOffset = distance (px) from the window's right edge to the strip's right edge.
 	local TAG_EDGE = tonumber(O.TagOffset) or 108
+	local TAG_PAD = 3 -- room so the outline of the first/last tag is never clipped
 	local TagSep = New("Frame", {
 		Name = "TagSeparator", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -(TAG_EDGE - 18), 0, 15),
-		Size = UDim2.fromOffset(1, 24), BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, Visible = false,
+		Size = UDim2.fromOffset(1, 24), BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, Visible = false, ZIndex = 6,
 	}, TopBar)
 	local TagScroll = New("ScrollingFrame", {
 		Name = "Tags", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -TAG_EDGE, 0, 10), Size = UDim2.fromOffset(0, 34),
-		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Violet,
-		CanvasSize = UDim2.new(), AutomaticCanvasSize = AutoX, ScrollingDirection = Enum.ScrollingDirection.X,
+		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 0, ScrollBarImageColor3 = Theme.Violet,
+		CanvasSize = UDim2.new(), AutomaticCanvasSize = AutoX, ScrollingDirection = Enum.ScrollingDirection.X, ZIndex = 6,
 		ElasticBehavior = Enum.ElasticBehavior.Never, ClipsDescendants = true, Active = true, Visible = false,
 	}, TopBar)
+	Pad(TagScroll, TAG_PAD, 2, TAG_PAD, 2)
 	local TagList = List(TagScroll, 6, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
 	Win.TagFrame = TagScroll
 
 	local function Relayout()
 		local Scale = math.max(RootScale.Scale, 0.01)
-		local ContentW = TagList.AbsoluteContentSize.X / Scale
+		local RawW = TagList.AbsoluteContentSize.X / Scale
+		local ContentW = RawW > 0 and (RawW + TAG_PAD * 2) or 0
 		local MaxW = math.floor(BASE_W * 0.32)
 		local W = math.min(ContentW, MaxW)
 		local HasTags = ContentW > 0
@@ -2386,7 +2411,7 @@ function Library:CreateWindow(O)
 	TagScroll.MouseLeave:Connect(function() TagHover = false end)
 	Win:Connect(UserInputService.InputChanged, function(I)
 		if not TagHover or I.UserInputType ~= Enum.UserInputType.MouseWheel then return end
-		local ContentW = TagList.AbsoluteContentSize.X / math.max(RootScale.Scale, 0.01)
+		local ContentW = TagList.AbsoluteContentSize.X / math.max(RootScale.Scale, 0.01) + TAG_PAD * 2
 		local MaxScroll = math.max(ContentW - TagScroll.Size.X.Offset, 0)
 		local X = math.clamp(TagScroll.CanvasPosition.X - I.Position.Z * 40, 0, MaxScroll)
 		TagScroll.CanvasPosition = Vector2.new(X, 0)
@@ -2459,7 +2484,7 @@ function Library:CreateWindow(O)
 	}, Gui)
 	Corner(Bubble, 24)
 	Gradient(Bubble, Theme.Violet, Theme.Cyan, 45)
-	Stroke(Bubble, White, 1.5, 0.6)
+	Stroke(Bubble, White, 1, 0.75)
 	local BubbleButton = New("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "" }, Bubble)
 	local BubbleImg = New("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(24, 24),
@@ -2531,8 +2556,8 @@ function Library:CreateWindow(O)
 		}, Main)
 		Corner(Splash, MAIN_RADIUS)
 		Gradient(Splash, Theme.Bg2, Theme.Bg, 135)
-		Orb(Theme.Violet, 0.92, 0.08, 320, 0.65, Splash)
-		Orb(Theme.Cyan, 0.08, 0.92, 320, 0.65, Splash)
+		Orb(Theme.Violet, 0.92, 0.08, 320, 0.93, Splash)
+		Orb(Theme.Cyan, 0.08, 0.92, 320, 0.93, Splash)
 		local SLogo = New("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -44), Size = UDim2.fromOffset(0, 0),
 			BackgroundColor3 = White, BorderSizePixel = 0, ZIndex = 2,
