@@ -35,8 +35,8 @@ local Theme = {
 Library.Theme = Theme
 
 local ParagraphColors = {
-	Red = Color3.fromRGB(224, 108, 108), Orange = Color3.fromRGB(220, 148, 84), Green = Color3.fromRGB(96, 192, 132),
-	Blue = Color3.fromRGB(98, 138, 232), Purple = Color3.fromRGB(150, 132, 214), Grey = Color3.fromRGB(148, 153, 166),
+	Red = Color3.fromRGB(248, 113, 113), Orange = Color3.fromRGB(251, 146, 60), Green = Color3.fromRGB(74, 222, 128),
+	Blue = Color3.fromRGB(59, 130, 246), Purple = Color3.fromRGB(139, 92, 255), Grey = Color3.fromRGB(148, 153, 166),
 }
 
 local TypeColors = {
