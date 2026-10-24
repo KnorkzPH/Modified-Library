@@ -1,4 +1,4 @@
-local Library = { Version = "1.3.0" }
+local Library = { Version = "1.4.0" }
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -11,14 +11,15 @@ local LocalPlayer = Players.LocalPlayer
 
 local White = Color3.new(1, 1, 1)
 
+-- Brighter text + stronger borders so everything is easier to read (low vision friendly)
 local Theme = {
 	Bg = Color3.fromRGB(9, 9, 16),
 	Bg2 = Color3.fromRGB(18, 14, 34),
 	Card = Color3.fromRGB(19, 18, 32),
 	CardHover = Color3.fromRGB(27, 24, 46),
-	Stroke = Color3.fromRGB(42, 40, 66),
-	Text = Color3.fromRGB(242, 240, 255),
-	Muted = Color3.fromRGB(178, 175, 205),
+	Stroke = Color3.fromRGB(66, 63, 100),
+	Text = Color3.fromRGB(252, 251, 255),
+	Muted = Color3.fromRGB(208, 206, 232),
 	Violet = Color3.fromRGB(139, 92, 255),
 	Cyan = Color3.fromRGB(34, 211, 238),
 	Pink = Color3.fromRGB(255, 77, 166),
@@ -27,6 +28,7 @@ local Theme = {
 	Green = Color3.fromRGB(74, 222, 128),
 	Red = Color3.fromRGB(248, 113, 113),
 	Amber = Color3.fromRGB(251, 191, 36),
+	NotifBg = Color3.fromRGB(12, 11, 22),
 }
 Library.Theme = Theme
 
@@ -105,6 +107,44 @@ end
 
 local function StripRich(Text)
 	return (tostring(Text):gsub("<[^>]+>", ""))
+end
+
+----------------------------------------------------------------------
+-- Background transparency system
+-- Every "background" surface (window, cards, dialogs, notifications,
+-- inputs...) registers here. Setting BackgroundTransparency on the window
+-- (or Library:SetBackgroundTransparency) updates all of them at once.
+-- Tags are intentionally NOT registered, so they never change.
+----------------------------------------------------------------------
+Library.BackgroundTransparency = 0
+local BgRegistry = {}
+
+local function BgCalc(Base)
+	Base = Base or 0
+	return Base + (1 - Base) * Library.BackgroundTransparency
+end
+
+local function PruneBg()
+	for I = #BgRegistry, 1, -1 do
+		if BgRegistry[I].Obj.Parent == nil then table.remove(BgRegistry, I) end
+	end
+end
+
+local function Bg(Obj, Base)
+	Base = Base or 0
+	table.insert(BgRegistry, { Obj = Obj, Base = Base })
+	if #BgRegistry % 100 == 0 then PruneBg() end
+	Obj.BackgroundTransparency = BgCalc(Base)
+	return Obj
+end
+
+function Library:SetBackgroundTransparency(V)
+	V = math.clamp(tonumber(V) or 0, 0, 1)
+	Library.BackgroundTransparency = V
+	PruneBg()
+	for _, E in ipairs(BgRegistry) do
+		pcall(function() E.Obj.BackgroundTransparency = BgCalc(E.Base) end)
+	end
 end
 
 local function safeHttpGet(url)
@@ -257,7 +297,7 @@ local function GradButton(Parent, Text, Size, Position, ColA, ColB, TextSize)
 	local S = Stroke(Holder, White, 1, 0.85)
 	local Button = New("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, AutoButtonColor = false, Text = Text,
-		TextColor3 = White, TextSize = TextSize or 12, Font = FontBold,
+		TextColor3 = White, TextSize = TextSize or 13, Font = FontBold,
 	}, Holder)
 	Button.MouseEnter:Connect(function() Tween(S, 0.18, { Transparency = 0.3 }) Tween(G, 0.45, { Rotation = 200 }) end)
 	Button.MouseLeave:Connect(function() Tween(S, 0.18, { Transparency = 0.85 }) Tween(G, 0.45, { Rotation = 20 }) end)
@@ -267,7 +307,7 @@ end
 local function IconButton(Parent, Text, Position, HoverColor)
 	local B = New("TextButton", {
 		Size = UDim2.fromOffset(26, 26), Position = Position, BackgroundColor3 = Theme.Card, BorderSizePixel = 0,
-		AutoButtonColor = false, Text = Text, TextColor3 = Theme.Muted, TextSize = 16, Font = FontBold,
+		AutoButtonColor = false, Text = Text, TextColor3 = Theme.Muted, TextSize = 18, Font = FontBold,
 	}, Parent)
 	Corner(B, 8)
 	Stroke(B, Theme.Stroke, 1)
@@ -405,9 +445,10 @@ local function BuildDialog(Host, O)
 		Tween(Host.Dim, 0.2, { BackgroundTransparency = 0.4 })
 
 		Box = New("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 340, 0, 0),
+			AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 360, 0, 0),
 			AutomaticSize = AutoY, BackgroundColor3 = Color3.fromRGB(24, 22, 40), BorderSizePixel = 0, ZIndex = 2, Active = true,
 		}, Host.Modal)
+		Bg(Box, 0)
 		Corner(Box, 14)
 		Gradient(Stroke(Box, White, 2, 0.05), Theme.Violet, Theme.Cyan, 45)
 		Pad(Box, 18, 16, 18, 16)
@@ -415,28 +456,28 @@ local function BuildDialog(Host, O)
 		Sc = New("UIScale", { Scale = 0.9 }, Box)
 		Tween(Sc, 0.3, { Scale = 1 }, Enum.EasingStyle.Back)
 
-		local TitleRow = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1 }, Box)
+		local TitleRow = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1 }, Box)
 		local TX = 0
 		if O.Icon then
-			IconLabel(TitleRow, O.Icon, 20, Theme.Violet, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
-			TX = 28
+			IconLabel(TitleRow, O.Icon, 22, Theme.Violet, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
+			TX = 30
 		end
 		New("TextLabel", {
 			Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -TX, 1, 0), BackgroundTransparency = 1, RichText = true,
-			Text = O.Title or "Dialog", TextColor3 = White, TextSize = 16, Font = FontBlack, TextXAlignment = Left,
+			Text = O.Title or "Dialog", TextColor3 = White, TextSize = 18, Font = FontBlack, TextXAlignment = Left,
 		}, TitleRow)
 		local Body = O.Content or O.Desc
 		if Body then
 			New("TextLabel", {
 				LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-				Text = Body, TextColor3 = Color3.fromRGB(235, 233, 255), TextSize = 13, Font = FontMed, TextWrapped = true,
+				Text = Body, TextColor3 = Color3.fromRGB(245, 244, 255), TextSize = 14, Font = FontMed, TextWrapped = true,
 				TextXAlignment = Left, TextYAlignment = Enum.TextYAlignment.Top,
 			}, Box)
 		end
 
 		local Buttons = O.Buttons or {}
 		if #Buttons > 0 then
-			local Row = New("Frame", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1 }, Box)
+			local Row = New("Frame", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 42), BackgroundTransparency = 1 }, Box)
 			List(Row, 8, { FillDirection = Enum.FillDirection.Horizontal })
 			local N = #Buttons
 			for I, B in ipairs(Buttons) do
@@ -445,13 +486,13 @@ local function BuildDialog(Host, O)
 				local Btn
 				if Variant == "Primary" then
 					local Holder
-					Btn, Holder = GradButton(Row, B.Title or "Button", Size, UDim2.new(), Theme.Violet, Theme.Blue, 12)
+					Btn, Holder = GradButton(Row, B.Title or "Button", Size, UDim2.new(), Theme.Violet, Theme.Blue, 13)
 					Holder.LayoutOrder = I
 				else
 					Btn = New("TextButton", {
 						LayoutOrder = I, Size = Size, BackgroundColor3 = Color3.fromRGB(36, 33, 60),
 						BackgroundTransparency = Variant == "Tertiary" and 1 or 0, BorderSizePixel = 0, AutoButtonColor = false,
-						Text = B.Title or "Button", TextColor3 = Color3.fromRGB(210, 205, 240), TextSize = 12, Font = FontBold,
+						Text = B.Title or "Button", TextColor3 = Color3.fromRGB(235, 232, 255), TextSize = 13, Font = FontBold,
 					}, Row)
 					Corner(Btn, 10)
 					if Variant ~= "Tertiary" then Stroke(Btn, Theme.Stroke, 1.2) end
@@ -508,8 +549,27 @@ function Library:Popup(O)
 	return D
 end
 
-local NotifGui, NotifHolder
-local NotifLower = false
+----------------------------------------------------------------------
+-- Notifications
+-- * Square corners, stacked at the BOTTOM of the screen (bottom-right by default)
+-- * The auto-dismiss timer is merged into the card: the colored background
+--   slowly drains away while the text/icon on top stays fully visible
+-- * Large, high-contrast text and follows Library.BackgroundTransparency
+----------------------------------------------------------------------
+local NotifGui, NotifHolder, NotifList
+local NotifOrder = 0
+local NotifActive = {}
+local NotifMargin = 16
+local NotifSide = "Right"
+
+local function ApplyNotifLayout()
+	if not (NotifHolder and NotifHolder.Parent) then return end
+	local IsLeft = NotifSide == "Left"
+	NotifHolder.Size = UDim2.new(1, -NotifMargin * 2, 1, -NotifMargin * 2)
+	NotifHolder.AnchorPoint = Vector2.new(IsLeft and 0 or 1, 1)
+	NotifHolder.Position = UDim2.new(IsLeft and 0 or 1, IsLeft and NotifMargin or -NotifMargin, 1, -NotifMargin)
+	NotifList.HorizontalAlignment = IsLeft and Enum.HorizontalAlignment.Left or Enum.HorizontalAlignment.Right
+end
 
 local function EnsureNotif()
 	if NotifGui and NotifGui.Parent then return end
@@ -518,16 +578,22 @@ local function EnsureNotif()
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	})
 	ParentGui(NotifGui)
-	NotifHolder = New("Frame", {
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, NotifLower and 64 or 16),
-		Size = UDim2.new(0, 300, 1, -80), BackgroundTransparency = 1,
-	}, NotifGui)
-	List(NotifHolder, 8, { VerticalAlignment = Enum.VerticalAlignment.Top, HorizontalAlignment = Enum.HorizontalAlignment.Right })
+	NotifHolder = New("Frame", { Name = "Holder", BackgroundTransparency = 1 }, NotifGui)
+	New("UISizeConstraint", { MaxSize = Vector2.new(380, math.huge) }, NotifHolder)
+	NotifList = List(NotifHolder, 8, { VerticalAlignment = Enum.VerticalAlignment.Bottom })
+	ApplyNotifLayout()
 end
 
+-- "Right" (default) or "Left"; both are always at the bottom of the screen
+function Library:SetNotificationPosition(Side)
+	NotifSide = string.find(string.lower(tostring(Side or "")), "left") and "Left" or "Right"
+	ApplyNotifLayout()
+end
+
+-- Kept for older scripts: true = lift the stack higher from the bottom edge (useful for mobile)
 function Library:SetNotificationLower(V)
-	NotifLower = V and true or false
-	if NotifHolder then NotifHolder.Position = UDim2.new(1, -16, 0, NotifLower and 64 or 16) end
+	NotifMargin = V and 64 or 16
+	ApplyNotifLayout()
 end
 
 function Library:Notify(O)
@@ -535,53 +601,80 @@ function Library:Notify(O)
 	O = O or {}
 	EnsureNotif()
 	local Col = O.Color or (O.Type and TypeColors[string.lower(tostring(O.Type))]) or Theme.Violet
-	local Dur = O.Duration or 4
+	local Dur = math.max(tonumber(O.Duration) or 4, 0.5)
+	local OffX = (NotifSide == "Left" and -1 or 1) * 440
+	NotifOrder += 1
 
-	local Holder = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, NotifHolder)
+	while #NotifActive >= 5 do
+		local Oldest = table.remove(NotifActive, 1)
+		pcall(Oldest)
+	end
+
+	local Holder = New("Frame", {
+		LayoutOrder = NotifOrder, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
+	}, NotifHolder)
+
+	-- Square card (no UICorner on purpose)
 	local Card = New("Frame", {
-		Position = UDim2.fromOffset(340, 0), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY,
-		BackgroundColor3 = Color3.fromRGB(24, 22, 40), BorderSizePixel = 0, ClipsDescendants = true,
+		Position = UDim2.fromOffset(OffX, 0), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY,
+		BackgroundColor3 = Theme.NotifBg, BorderSizePixel = 0, ClipsDescendants = true,
 	}, Holder)
-	Corner(Card, 12)
-	Stroke(Card, Col, 1.2, 0.3)
+	Bg(Card, 0.02)
+	Stroke(Card, Col, 2, 0)
 
-	local Body = New("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, Card)
-	Pad(Body, 14, 12, 14, 14)
+	-- Disappearance "bar" merged into the background: it drains from right to left behind the content
+	local Fill = New("Frame", {
+		Name = "TimerFill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Col, BackgroundTransparency = 0.72,
+		BorderSizePixel = 0, ZIndex = 1,
+	}, Card)
+	-- Solid accent stripe (does not shrink, so the type color is always visible)
+	New("Frame", { Name = "Accent", Size = UDim2.new(0, 5, 1, 0), BackgroundColor3 = Col, BorderSizePixel = 0, ZIndex = 2 }, Card)
+
+	local Body = New("Frame", {
+		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, ZIndex = 3,
+	}, Card)
+	Pad(Body, 20, 12, 38, 12)
 	local TextX = 0
 	if O.Icon then
-		IconLabel(Body, O.Icon, 18, Col, { Position = UDim2.fromOffset(0, 1) }, "•")
-		TextX = 28
+		IconLabel(Body, O.Icon, 24, Col, { Position = UDim2.fromOffset(0, 0) }, "•")
+		TextX = 34
 	end
 	local Column = New("Frame", {
 		Position = UDim2.fromOffset(TextX, 0), Size = UDim2.new(1, -TextX, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1,
 	}, Body)
-	List(Column, 3)
+	List(Column, 4)
 	New("TextLabel", {
 		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-		Text = O.Title or "Notification", TextColor3 = Theme.Text, TextSize = 13, Font = FontBold, TextWrapped = true, TextXAlignment = Left,
+		Text = O.Title or "Notification", TextColor3 = White, TextSize = 17, Font = FontBold, TextWrapped = true,
+		TextXAlignment = Left, TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
 	}, Column)
 	if O.Content then
 		New("TextLabel", {
 			LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-			Text = O.Content, TextColor3 = Theme.Muted, TextSize = 11, Font = FontMed, TextWrapped = true, TextXAlignment = Left,
+			Text = O.Content, TextColor3 = Color3.fromRGB(240, 238, 252), TextSize = 15, Font = FontMed, TextWrapped = true,
+			TextXAlignment = Left, TextStrokeColor3 = Color3.new(0, 0, 0), TextStrokeTransparency = 0.75,
 		}, Column)
 	end
-	local Bar = New("Frame", {
-		AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 3),
-		BackgroundColor3 = Col, BorderSizePixel = 0, ZIndex = 2,
+	New("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 6), Size = UDim2.fromOffset(20, 20),
+		BackgroundTransparency = 1, Text = "×", TextColor3 = Theme.Muted, TextSize = 22, Font = FontBold, ZIndex = 4,
 	}, Card)
 
 	local Gone = false
 	local function Dismiss()
 		if Gone then return end
 		Gone = true
-		local T = Tween(Card, 0.3, { Position = UDim2.fromOffset(340, 0) })
+		local I = table.find(NotifActive, Dismiss)
+		if I then table.remove(NotifActive, I) end
+		local T = Tween(Card, 0.25, { Position = UDim2.fromOffset(OffX, 0) }, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
 		T.Completed:Connect(function() Holder:Destroy() end)
 	end
+	table.insert(NotifActive, Dismiss)
+
 	Tween(Card, 0.35, { Position = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back)
-	Tween(Bar, Dur, { Size = UDim2.new(0, 0, 0, 3) }, Enum.EasingStyle.Linear)
+	Tween(Fill, Dur, { Size = UDim2.new(0, 0, 1, 0) }, Enum.EasingStyle.Linear)
 	task.delay(Dur, Dismiss)
-	New("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 3 }, Card).MouseButton1Click:Connect(Dismiss)
+	New("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 6 }, Card).MouseButton1Click:Connect(Dismiss)
 
 	return { Close = Dismiss }
 end
@@ -599,27 +692,28 @@ function Elements:_Card(O, RightW, Clickable)
 	local Card = New("Frame", {
 		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundColor3 = Theme.Card, BorderSizePixel = 0, Active = true,
 	}, Root)
+	Bg(Card, 0)
 	Corner(Card, 10)
 	local CS = Stroke(Card, Theme.Stroke, 1)
 	Pad(Card, 12, 8, 12, 8)
-	New("UISizeConstraint", { MinSize = Vector2.new(0, 44) }, Card)
+	New("UISizeConstraint", { MinSize = Vector2.new(0, 46) }, Card)
 	List(Card, 8, { VerticalAlignment = Enum.VerticalAlignment.Center })
 
 	local Lock = New("TextButton", {
-		Name = "LockOverlay", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(8, 8, 14), BackgroundTransparency = 0.35,
+		Name = "LockOverlay", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(8, 8, 14), BackgroundTransparency = 0.3,
 		BorderSizePixel = 0, Text = "", AutoButtonColor = false, Visible = false, ZIndex = 20,
 	}, Root)
 	Corner(Lock, 10)
 	local LockRow = New("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(0, 18),
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(0, 20),
 		AutomaticSize = AutoX, BackgroundTransparency = 1,
 	}, Lock)
 	List(LockRow, 6, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
-	local LockIconWrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1 }, LockRow)
-	IconLabel(LockIconWrap, "lock", 14, Theme.Amber, { Position = UDim2.fromOffset(0, 0) }, "•")
+	local LockIconWrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1 }, LockRow)
+	IconLabel(LockIconWrap, "lock", 16, Theme.Amber, { Position = UDim2.fromOffset(0, 0) }, "•")
 	local LockLabel = New("TextLabel", {
-		LayoutOrder = 2, Size = UDim2.fromOffset(0, 18), AutomaticSize = AutoX, BackgroundTransparency = 1, Text = "Locked",
-		TextColor3 = Theme.Text, TextSize = 11, Font = FontBold,
+		LayoutOrder = 2, Size = UDim2.fromOffset(0, 20), AutomaticSize = AutoX, BackgroundTransparency = 1, Text = "Locked",
+		TextColor3 = Theme.Text, TextSize = 13, Font = FontBold,
 	}, LockRow)
 
 	local HeadProps = { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }
@@ -628,11 +722,11 @@ function Elements:_Card(O, RightW, Clickable)
 		HeadProps.AutoButtonColor = false
 	end
 	local Head = New(Clickable and "TextButton" or "Frame", HeadProps, Card)
-	New("UISizeConstraint", { MinSize = Vector2.new(0, 22) }, Head)
+	New("UISizeConstraint", { MinSize = Vector2.new(0, 24) }, Head)
 
 	local TextX, Ico = 0, nil
 	if O.Icon and O.Icon ~= "" then
-		local IS = O.IconSize or 18
+		local IS = O.IconSize or 20
 		Ico = IconLabel(Head, O.Icon, IS, Theme.Violet, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
 		TextX = IS + 10
 	end
@@ -644,13 +738,13 @@ function Elements:_Card(O, RightW, Clickable)
 	List(Column, 2)
 	local Title = New("TextLabel", {
 		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-		Text = O.Title or "Element", TextColor3 = Theme.Text, TextSize = 13, Font = FontBold, TextWrapped = true, TextXAlignment = Left,
+		Text = O.Title or "Element", TextColor3 = Theme.Text, TextSize = 14, Font = FontBold, TextWrapped = true, TextXAlignment = Left,
 	}, Column)
 	local Desc
 	if O.Desc then
 		Desc = New("TextLabel", {
 			LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
-			Text = O.Desc, TextColor3 = Theme.Muted, TextSize = 11, Font = FontMed, TextWrapped = true, TextXAlignment = Left,
+			Text = O.Desc, TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed, TextWrapped = true, TextXAlignment = Left,
 		}, Column)
 	end
 
@@ -796,12 +890,12 @@ function Elements:Slider(O)
 	if Default == nil then Default = O.Default end
 	if Default == nil and type(O.Value) == "number" then Default = O.Value end
 	local Step = O.Step or 1
-	local C = self:_Card(O, 76)
+	local C = self:_Card(O, 80)
 	local Obj = { Value = Min }
 
 	local ValueBox = New("TextBox", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(76, 18),
-		BackgroundTransparency = 1, Text = "", TextColor3 = Theme.Violet, TextSize = 12, Font = FontBold, TextXAlignment = Right,
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(80, 20),
+		BackgroundTransparency = 1, Text = "", TextColor3 = Theme.Cyan, TextSize = 14, Font = FontBold, TextXAlignment = Right,
 		ClearTextOnFocus = false, TextEditable = O.IsTextbox == true, TextTruncate = Enum.TextTruncate.AtEnd,
 	}, C.Head)
 	local Holder = New("Frame", {
@@ -867,14 +961,15 @@ function Elements:Dropdown(O)
 	local Open = false
 
 	local Pill = New("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(140, 26),
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(140, 28),
 		BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, AutoButtonColor = false, Text = "",
 	}, C.Head)
+	Bg(Pill, 0)
 	Corner(Pill, 8)
 	local PillStroke = Stroke(Pill, Theme.Stroke, 1)
 	local ValueLabel = New("TextLabel", {
 		Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -32, 1, 0), BackgroundTransparency = 1, Text = "",
-		TextColor3 = Theme.Text, TextSize = 11, Font = FontMed, TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = Theme.Text, TextSize = 12, Font = FontMed, TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
 	}, Pill)
 	local Chevron = IconLabel(Pill, "chevron-down", 14, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0) }, "v")
 
@@ -893,6 +988,7 @@ function Elements:Dropdown(O)
 		LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, ClipsDescendants = true, Visible = false,
 		Active = true,
 	}, C.Card)
+	Bg(Holder, 0)
 	Corner(Holder, 8)
 	Stroke(Holder, Theme.Violet, 1, 0.55)
 	local Scroll = New("ScrollingFrame", {
@@ -1003,7 +1099,7 @@ function Elements:Dropdown(O)
 		if #Values == 0 then
 			New("TextLabel", {
 				LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = O.EmptyText or "No options",
-				TextColor3 = Theme.Muted, TextSize = 11, Font = FontMed,
+				TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed,
 			}, Scroll)
 			ContentH = 32
 			return
@@ -1046,7 +1142,7 @@ function Elements:Dropdown(O)
 				end
 				local Lbl = New("TextLabel", {
 					LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = AutoX, BackgroundTransparency = 1, Text = Name,
-					TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed,
+					TextColor3 = Theme.Muted, TextSize = 13, Font = FontMed,
 				}, Row)
 				if ItemLocked then
 					local LockWrap = New("Frame", { LayoutOrder = 3, Size = UDim2.fromOffset(0, 28), AutomaticSize = AutoX, BackgroundTransparency = 1 }, Row)
@@ -1056,7 +1152,7 @@ function Elements:Dropdown(O)
 					if LockText ~= "" then
 						New("TextLabel", {
 							LayoutOrder = 2, Size = UDim2.fromOffset(0, 28), AutomaticSize = AutoX, BackgroundTransparency = 1, Text = LockText,
-							TextColor3 = Theme.Amber, TextSize = 10, Font = FontBold,
+							TextColor3 = Theme.Amber, TextSize = 11, Font = FontBold,
 						}, LockWrap)
 					end
 				end
@@ -1146,10 +1242,11 @@ function Elements:Input(O)
 		}, C.Card)
 	else
 		Pill = New("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(170, 26),
+			AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(170, 28),
 			BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, ClipsDescendants = true,
 		}, C.Head)
 	end
+	Bg(Pill, 0)
 	Corner(Pill, 8)
 	local PS = Stroke(Pill, Theme.Stroke, 1)
 
@@ -1161,7 +1258,7 @@ function Elements:Input(O)
 	local TB = New("TextBox", {
 		Position = UDim2.fromOffset(TX, Textarea and 4 or 0), Size = UDim2.new(1, -(TX + 8), 1, Textarea and -8 or 0),
 		BackgroundTransparency = 1, Text = "", PlaceholderText = O.Placeholder or "Enter text...", PlaceholderColor3 = Theme.Muted,
-		TextColor3 = Theme.Text, TextSize = 12, Font = FontMed, ClearTextOnFocus = O.ClearTextOnFocus == true, TextXAlignment = Left,
+		TextColor3 = Theme.Text, TextSize = 13, Font = FontMed, ClearTextOnFocus = O.ClearTextOnFocus == true, TextXAlignment = Left,
 		TextYAlignment = Textarea and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center, MultiLine = Textarea, TextWrapped = Textarea,
 	}, Pill)
 	TB.Focused:Connect(function() Tween(PS, 0.15, { Color = Theme.Violet }) end)
@@ -1194,10 +1291,11 @@ function Elements:Keybind(O)
 	local Listening = false
 
 	local Pill = New("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(86, 26),
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(86, 28),
 		BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, AutoButtonColor = false, Text = "None", TextColor3 = Theme.Text,
-		TextSize = 11, Font = FontBold,
+		TextSize = 12, Font = FontBold,
 	}, C.Head)
+	Bg(Pill, 0)
 	Corner(Pill, 8)
 	local PS = Stroke(Pill, Theme.Stroke, 1)
 
@@ -1406,7 +1504,7 @@ function Elements:Paragraph(O)
 		List(Row, 6, { FillDirection = Enum.FillDirection.Horizontal, Wraps = true })
 		for I, B in ipairs(O.Buttons) do
 			local Btn = New("TextButton", {
-				LayoutOrder = I, Size = UDim2.fromOffset(0, 28), AutomaticSize = AutoX, BackgroundColor3 = Theme.CardHover,
+				LayoutOrder = I, Size = UDim2.fromOffset(0, 30), AutomaticSize = AutoX, BackgroundColor3 = Theme.CardHover,
 				BorderSizePixel = 0, AutoButtonColor = false, Text = "",
 			}, Row)
 			Corner(Btn, 8)
@@ -1420,7 +1518,7 @@ function Elements:Paragraph(O)
 			end
 			New("TextLabel", {
 				LayoutOrder = 2, Size = UDim2.new(0, 0, 1, 0), AutomaticSize = AutoX, BackgroundTransparency = 1,
-				Text = B.Title or "Button", TextColor3 = Theme.Text, TextSize = 11, Font = FontBold,
+				Text = B.Title or "Button", TextColor3 = Theme.Text, TextSize = 12, Font = FontBold,
 			}, Inner)
 			Btn.MouseButton1Click:Connect(function() Call(B.Callback) end)
 		end
@@ -1435,21 +1533,22 @@ end
 
 function Elements:Code(O)
 	O = O or {}
-	local C = self:_Card({ Title = O.Title or "Code", Icon = O.Icon }, 60, false)
+	local C = self:_Card({ Title = O.Title or "Code", Icon = O.Icon }, 64, false)
 	local Obj = { Value = O.Code or "" }
 	local Block = New("Frame", {
 		LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundColor3 = Theme.Bg, BorderSizePixel = 0,
 	}, C.Card)
+	Bg(Block, 0)
 	Corner(Block, 8)
 	Pad(Block, 10, 8, 10, 8)
 	local Lbl = New("TextLabel", {
 		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, Text = Obj.Value, TextColor3 = Theme.Cyan,
-		TextSize = 12, Font = Enum.Font.Code, TextWrapped = true, TextXAlignment = Left, TextYAlignment = Enum.TextYAlignment.Top,
+		TextSize = 13, Font = Enum.Font.Code, TextWrapped = true, TextXAlignment = Left, TextYAlignment = Enum.TextYAlignment.Top,
 	}, Block)
 	local Copy = New("TextButton", {
-		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(56, 24),
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(60, 26),
 		BackgroundColor3 = Theme.CardHover, BorderSizePixel = 0, AutoButtonColor = false, Text = "COPY", TextColor3 = Theme.Text,
-		TextSize = 10, Font = FontBold,
+		TextSize = 11, Font = FontBold,
 	}, C.Head)
 	Corner(Copy, 8)
 	Stroke(Copy, Theme.Stroke, 1)
@@ -1487,23 +1586,23 @@ function Elements:Section(O)
 
 	local Align = ({ Left = Left, Center = Enum.TextXAlignment.Center, Right = Right })[O.TextXAlignment or "Left"] or Left
 	local Header = New("TextButton", {
-		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
+		LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
 	}, Wrap)
 	local TX = 0
 	if O.Icon then
-		IconLabel(Header, O.Icon, 16, Theme.Violet, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
-		TX = 24
+		IconLabel(Header, O.Icon, 18, Theme.Violet, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
+		TX = 26
 	end
 	local Lbl = New("TextLabel", {
 		Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -(TX + 24), 1, 0), BackgroundTransparency = 1, RichText = true,
-		Text = O.Title or "Section", TextColor3 = Theme.Text, TextTransparency = O.TextTransparency or 0.05,
-		TextSize = O.TextSize or 15, Font = FontBold, TextXAlignment = Align,
+		Text = O.Title or "Section", TextColor3 = Theme.Text, TextTransparency = O.TextTransparency or 0,
+		TextSize = O.TextSize or 16, Font = FontBold, TextXAlignment = Align,
 	}, Header)
 	local Chev = IconLabel(Header, "chevron-down", 14, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -2, 0.5, 0) }, "v")
 
 	local Body = New("Frame", { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, Wrap)
 	if O.Box then
-		Body.BackgroundTransparency = 0.3
+		Bg(Body, 0.3)
 		Body.BackgroundColor3 = Theme.Bg2
 		Corner(Body, 12)
 		Stroke(Body, Theme.Stroke, 1)
@@ -1557,7 +1656,7 @@ function Window:_MakeTab(O, ParentFrame)
 	local Tab = setmetatable({ Win = self, _n = 0, Title = O.Title or "Tab", Locked = false, LockTitle = LockTitle }, TabClass)
 
 	local Btn = New("TextButton", {
-		LayoutOrder = self:_NextSide(), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, BorderSizePixel = 0,
+		LayoutOrder = self:_NextSide(), Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1, BorderSizePixel = 0,
 		AutoButtonColor = false, Text = "",
 	}, ParentFrame)
 	Corner(Btn, 10)
@@ -1574,10 +1673,10 @@ function Window:_MakeTab(O, ParentFrame)
 	local TextL = 12
 	if O.Icon then
 		if IconRight then
-			Ico, IcoFB = IconLabel(Btn, O.Icon, 16, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0.5, 0) }, "•")
+			Ico, IcoFB = IconLabel(Btn, O.Icon, 17, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -11, 0.5, 0) }, "•")
 		else
-			Ico, IcoFB = IconLabel(Btn, O.Icon, 16, Theme.Muted, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 11, 0.5, 0) }, "•")
-			TextL = 35
+			Ico, IcoFB = IconLabel(Btn, O.Icon, 17, Theme.Muted, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 11, 0.5, 0) }, "•")
+			TextL = 36
 		end
 	end
 	local LockIco, LockFB = IconLabel(Btn, "lock", 14, Theme.Amber, {
@@ -1586,7 +1685,7 @@ function Window:_MakeTab(O, ParentFrame)
 
 	local Lbl = New("TextLabel", {
 		Position = UDim2.fromOffset(TextL, 0), Size = UDim2.new(1, -(TextL + 10), 1, 0), BackgroundTransparency = 1,
-		Text = Tab.Title, TextColor3 = Theme.Muted, TextSize = 12, Font = FontBold, TextXAlignment = Left,
+		Text = Tab.Title, TextColor3 = Theme.Muted, TextSize = 13, Font = FontBold, TextXAlignment = Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, Btn)
 
@@ -1689,7 +1788,7 @@ function Window:Section(O)
 	O = O or {}
 	local Wrap = New("Frame", { LayoutOrder = self:_NextSide(), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, self.Sidebar)
 	List(Wrap, 4)
-	local Header = New("TextButton", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, Wrap)
+	local Header = New("TextButton", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, Wrap)
 	local TX = 6
 	if O.Icon then
 		IconLabel(Header, O.Icon, 14, Theme.Muted, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0) }, "•")
@@ -1697,7 +1796,7 @@ function Window:Section(O)
 	end
 	New("TextLabel", {
 		Position = UDim2.fromOffset(TX, 0), Size = UDim2.new(1, -(TX + 28), 1, 0), BackgroundTransparency = 1, Text = string.upper(StripRich(O.Title or "SECTION")),
-		TextColor3 = Theme.Muted, TextSize = 10, Font = FontBold, TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = Theme.Muted, TextSize = 11, Font = FontBold, TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
 	}, Header)
 	local Chev = IconLabel(Header, "chevron-down", 14, Theme.Muted, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0) }, "v")
 	local Body = New("Frame", { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1 }, Wrap)
@@ -1775,24 +1874,38 @@ function Window:SetAuthor(T)
 	self.AuthorLabel.Text = T
 end
 
+-- 0 = fully solid, 1 = fully see-through. Affects the window, cards, inputs,
+-- dialogs and notifications. Tags are never affected.
+function Window:SetBackgroundTransparency(V)
+	Library:SetBackgroundTransparency(V)
+end
+
+----------------------------------------------------------------------
+-- Tags: shown left -> right in the exact order they were added
+-- (first Window:Tag = first tag). They live in a scrollable strip on the
+-- right side of the title bar, away from the minimize / close buttons.
+-- Tags keep their own fixed transparency (not affected by BackgroundTransparency).
+----------------------------------------------------------------------
 function Window:Tag(O)
+	if type(O) == "string" then O = { Title = O } end
 	O = O or {}
+	self._tagN += 1
 	local Col = O.Color or Theme.Violet
 	local Tag = New("Frame", {
-		LayoutOrder = #self.TagFrame:GetChildren(), Size = UDim2.fromOffset(0, 24), AutomaticSize = AutoX,
-		BackgroundColor3 = Col, BackgroundTransparency = 0.8, BorderSizePixel = 0,
+		Name = "Tag", LayoutOrder = self._tagN, Size = UDim2.fromOffset(0, 26), AutomaticSize = AutoX,
+		BackgroundColor3 = Col, BackgroundTransparency = O.Transparency or 0.72, BorderSizePixel = 0,
 	}, self.TagFrame)
-	Corner(Tag, math.clamp(O.Radius or 8, 0, 12))
-	Stroke(Tag, Col, 1, 0.5)
-	Pad(Tag, 8, 0, 8, 0)
+	Corner(Tag, math.clamp(O.Radius or 8, 0, 13))
+	Stroke(Tag, Col, 1.2, 0.3)
+	Pad(Tag, 9, 0, 9, 0)
 	List(Tag, 5, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
 	if O.Icon then
-		local Wrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1 }, Tag)
-		IconLabel(Wrap, O.Icon, 12, Col, nil, "•")
+		local Wrap = New("Frame", { LayoutOrder = 1, Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1 }, Tag)
+		IconLabel(Wrap, O.Icon, 14, Col:Lerp(White, 0.4), nil, "•")
 	end
 	local Lbl = New("TextLabel", {
 		LayoutOrder = 2, Size = UDim2.new(0, 0, 1, 0), AutomaticSize = AutoX, BackgroundTransparency = 1,
-		Text = O.Title or "Tag", TextColor3 = Col:Lerp(White, 0.3), TextSize = 10, Font = FontBold,
+		Text = O.Title or "Tag", TextColor3 = Col:Lerp(White, 0.55), TextSize = 12, Font = FontBold,
 	}, Tag)
 	local Obj = {}
 	function Obj:SetTitle(T) Lbl.Text = T end
@@ -2001,6 +2114,7 @@ local function BuildKeyGate(Win, KS)
 	local Gate = New("Frame", {
 		Name = "KeyGate", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BorderSizePixel = 0, ZIndex = 90, Active = true,
 	}, Win.Main)
+	Bg(Gate, 0)
 	Corner(Gate, MAIN_RADIUS)
 	Gradient(Gate, Theme.Bg2, Theme.Bg, 135)
 
@@ -2020,28 +2134,29 @@ local function BuildKeyGate(Win, KS)
 		TI += 1
 	end
 	New("TextLabel", {
-		LayoutOrder = TI, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, Text = (KS.Thumbnail and KS.Thumbnail.Title) or "KEY SYSTEM",
-		TextColor3 = White, TextSize = 18, Font = FontBlack, ZIndex = 91,
+		LayoutOrder = TI, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Text = (KS.Thumbnail and KS.Thumbnail.Title) or "KEY SYSTEM",
+		TextColor3 = White, TextSize = 20, Font = FontBlack, ZIndex = 91,
 	}, Box)
 	New("TextLabel", {
 		LayoutOrder = TI + 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, Text = KS.Note or "Enter your key to continue.",
-		TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed, TextWrapped = true, ZIndex = 91,
+		TextColor3 = Theme.Muted, TextSize = 13, Font = FontMed, TextWrapped = true, ZIndex = 91,
 	}, Box)
 
-	local Pill = New("Frame", { LayoutOrder = TI + 2, Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, ZIndex = 91 }, Box)
+	local Pill = New("Frame", { LayoutOrder = TI + 2, Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = Theme.Bg2, BorderSizePixel = 0, ZIndex = 91 }, Box)
+	Bg(Pill, 0)
 	Corner(Pill, 10)
 	local PS = Stroke(Pill, Theme.Stroke, 1)
 	local TB = New("TextBox", {
 		Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -24, 1, 0), BackgroundTransparency = 1, Text = "", PlaceholderText = "Enter key...",
-		PlaceholderColor3 = Theme.Muted, TextColor3 = Theme.Text, TextSize = 13, Font = FontMed, ClearTextOnFocus = false, TextXAlignment = Left, ZIndex = 92,
+		PlaceholderColor3 = Theme.Muted, TextColor3 = Theme.Text, TextSize = 14, Font = FontMed, ClearTextOnFocus = false, TextXAlignment = Left, ZIndex = 92,
 	}, Pill)
 
 	local StatusL = New("TextLabel", {
-		LayoutOrder = TI + 3, Size = UDim2.new(1, 0, 0, 14), BackgroundTransparency = 1, Text = "", TextColor3 = Theme.Muted,
-		TextSize = 11, Font = FontMed, ZIndex = 91,
+		LayoutOrder = TI + 3, Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = "", TextColor3 = Theme.Muted,
+		TextSize = 12, Font = FontMed, ZIndex = 91,
 	}, Box)
 
-	local Row = New("Frame", { LayoutOrder = TI + 4, Size = UDim2.new(1, 0, 0, 38), BackgroundTransparency = 1, ZIndex = 91 }, Box)
+	local Row = New("Frame", { LayoutOrder = TI + 4, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, ZIndex = 91 }, Box)
 	List(Row, 8, { FillDirection = Enum.FillDirection.Horizontal })
 
 	local function Unlock(K)
@@ -2086,7 +2201,7 @@ local function BuildKeyGate(Win, KS)
 	if KS.URL then
 		local Get = New("TextButton", {
 			LayoutOrder = 1, Size = UDim2.new(0.5, -4, 1, 0), BackgroundColor3 = Color3.fromRGB(36, 33, 60), BorderSizePixel = 0,
-			AutoButtonColor = false, Text = "GET KEY", TextColor3 = Theme.Text, TextSize = 12, Font = FontBold, ZIndex = 92,
+			AutoButtonColor = false, Text = "GET KEY", TextColor3 = Theme.Text, TextSize = 13, Font = FontBold, ZIndex = 92,
 		}, Row)
 		Corner(Get, 10)
 		Stroke(Get, Theme.Stroke, 1.2)
@@ -2096,7 +2211,7 @@ local function BuildKeyGate(Win, KS)
 			StatusL.TextColor3 = Ok and Theme.Cyan or Theme.Red
 		end)
 	end
-	local Submit, SH = GradButton(Row, "SUBMIT", UDim2.new(KS.URL and 0.5 or 1, KS.URL and -4 or 0, 1, 0), UDim2.new(), Theme.Violet, Theme.Blue, 12)
+	local Submit, SH = GradButton(Row, "SUBMIT", UDim2.new(KS.URL and 0.5 or 1, KS.URL and -4 or 0, 1, 0), UDim2.new(), Theme.Violet, Theme.Blue, 13)
 	SH.LayoutOrder = 2
 	SH.ZIndex = 92
 	Submit.ZIndex = 93
@@ -2115,6 +2230,11 @@ end
 function Library:CreateWindow(O)
 	O = O or {}
 
+	-- Optional: BackgroundTransparency = 0..1 (applies to window, cards, dialogs, notifications; never to Tags)
+	if type(O.BackgroundTransparency) == "number" then
+		Library:SetBackgroundTransparency(O.BackgroundTransparency)
+	end
+
 	local Size = typeof(O.Size) == "UDim2" and O.Size or UDim2.fromOffset(600, 400)
 	local BASE_W, BASE_H = Size.X.Offset, Size.Y.Offset
 	local SBW = math.clamp(O.SideBarWidth or 160, 120, math.floor(BASE_W * 0.4))
@@ -2124,7 +2244,7 @@ function Library:CreateWindow(O)
 	local PlainTitle = StripRich(O.Title or "ToolkitUI")
 
 	local Win = setmetatable({
-		Connections = {}, Tabs = {}, Destroyed = false, Hidden = false, _side = 0, _Elements = {}, FlagElements = {},
+		Connections = {}, Tabs = {}, Destroyed = false, Hidden = false, _side = 0, _tagN = 0, _Elements = {}, FlagElements = {},
 		Folder = FolderName, ToggleKey = O.ToggleKey or Enum.KeyCode.RightShift, _openButton = true,
 		_moving = O.MovingAnimation ~= false, _particles = O.Particles ~= false,
 	}, Window)
@@ -2170,9 +2290,10 @@ function Library:CreateWindow(O)
 	}, Root)
 
 	local Main = New("Frame", {
-		Name = "Main", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = O.Transparent and 0.12 or 0,
+		Name = "Main", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White,
 		BorderSizePixel = 0, ClipsDescendants = true, ZIndex = 2, Active = true,
 	}, Root)
+	Bg(Main, O.Transparent and 0.12 or 0)
 	Corner(Main, MAIN_RADIUS)
 	Gradient(Main, Theme.Bg2, Theme.Bg, 135)
 	local BorderStroke = Stroke(Main, White, 1.5, 0.1)
@@ -2213,32 +2334,63 @@ function Library:CreateWindow(O)
 
 	Win.TitleLabel = New("TextLabel", {
 		Position = UDim2.fromOffset(58, 8), Size = UDim2.fromOffset(BASE_W - 250, 22), BackgroundTransparency = 1, RichText = true,
-		Text = O.Title or "ToolkitUI", TextColor3 = Theme.Text, TextSize = 16, Font = FontBlack, TextXAlignment = Left,
+		Text = O.Title or "ToolkitUI", TextColor3 = Theme.Text, TextSize = 17, Font = FontBlack, TextXAlignment = Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, TopBar)
 	Win.AuthorLabel = New("TextLabel", {
-		Position = UDim2.fromOffset(58, 30), Size = UDim2.fromOffset(BASE_W - 250, 14), BackgroundTransparency = 1,
-		Text = O.Author or "", TextColor3 = Theme.Muted, TextSize = 10, Font = FontMed, TextXAlignment = Left,
+		Position = UDim2.fromOffset(58, 30), Size = UDim2.fromOffset(BASE_W - 250, 16), BackgroundTransparency = 1,
+		Text = O.Author or "", TextColor3 = Theme.Muted, TextSize = 12, Font = FontMed, TextXAlignment = Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, TopBar)
 
 	local CloseButton = IconButton(TopBar, "×", UDim2.new(1, -40, 0, 14), Theme.Red)
 	local MinButton = IconButton(TopBar, "–", UDim2.new(1, -72, 0, 14), Theme.Violet)
 
-	Win.TagFrame = New("Frame", {
-		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -82, 0, 15), Size = UDim2.fromOffset(0, 24),
-		AutomaticSize = AutoX, BackgroundTransparency = 1,
+	-- Tag strip: scrollable, right side of the title bar, separated from the – and × buttons.
+	-- TagOffset = distance (px) from the window's right edge to the strip's right edge.
+	local TAG_EDGE = tonumber(O.TagOffset) or 108
+	local TagSep = New("Frame", {
+		Name = "TagSeparator", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -(TAG_EDGE - 18), 0, 15),
+		Size = UDim2.fromOffset(1, 24), BackgroundColor3 = Theme.Stroke, BorderSizePixel = 0, Visible = false,
 	}, TopBar)
-	List(Win.TagFrame, 6, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
+	local TagScroll = New("ScrollingFrame", {
+		Name = "Tags", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -TAG_EDGE, 0, 10), Size = UDim2.fromOffset(0, 34),
+		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.Violet,
+		CanvasSize = UDim2.new(), AutomaticCanvasSize = AutoX, ScrollingDirection = Enum.ScrollingDirection.X,
+		ElasticBehavior = Enum.ElasticBehavior.Never, ClipsDescendants = true, Active = true, Visible = false,
+	}, TopBar)
+	local TagList = List(TagScroll, 6, { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center })
+	Win.TagFrame = TagScroll
 
-	local function FitTitle()
-		local Tw = Win.TagFrame.AbsoluteSize.X / math.max(RootScale.Scale, 0.01)
-		local Avail = math.max(BASE_W - 58 - 86 - (Tw > 0 and (Tw + 12) or 6), 40)
+	local function Relayout()
+		local Scale = math.max(RootScale.Scale, 0.01)
+		local ContentW = TagList.AbsoluteContentSize.X / Scale
+		local MaxW = math.floor(BASE_W * 0.32)
+		local W = math.min(ContentW, MaxW)
+		local HasTags = ContentW > 0
+		TagScroll.Visible = HasTags
+		TagSep.Visible = HasTags
+		TagScroll.Size = UDim2.fromOffset(W, 34)
+		local Reserve = HasTags and (TAG_EDGE + W + 14) or 86
+		local Avail = math.max(BASE_W - 58 - Reserve, 40)
 		Win.TitleLabel.Size = UDim2.fromOffset(Avail, 22)
-		Win.AuthorLabel.Size = UDim2.fromOffset(Avail, 14)
+		Win.AuthorLabel.Size = UDim2.fromOffset(Avail, 16)
 	end
-	Win.TagFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(FitTitle)
-	FitTitle()
+	TagList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(Relayout)
+	RootScale:GetPropertyChangedSignal("Scale"):Connect(Relayout)
+	Relayout()
+
+	-- Mouse wheel scrolls the tag strip sideways
+	local TagHover = false
+	TagScroll.MouseEnter:Connect(function() TagHover = true end)
+	TagScroll.MouseLeave:Connect(function() TagHover = false end)
+	Win:Connect(UserInputService.InputChanged, function(I)
+		if not TagHover or I.UserInputType ~= Enum.UserInputType.MouseWheel then return end
+		local ContentW = TagList.AbsoluteContentSize.X / math.max(RootScale.Scale, 0.01)
+		local MaxScroll = math.max(ContentW - TagScroll.Size.X.Offset, 0)
+		local X = math.clamp(TagScroll.CanvasPosition.X - I.Position.Z * 40, 0, MaxScroll)
+		TagScroll.CanvasPosition = Vector2.new(X, 0)
+	end)
 
 	local Divider = New("Frame", {
 		Position = UDim2.fromOffset(14, 53), Size = UDim2.new(1, -28, 0, 1), BackgroundColor3 = White, BorderSizePixel = 0, ZIndex = 5,
@@ -2257,7 +2409,7 @@ function Library:CreateWindow(O)
 
 	New("Frame", {
 		Position = UDim2.fromOffset(SBW + 20, 68), Size = UDim2.new(0, 1, 1, -(68 + 16)), BackgroundColor3 = Theme.Stroke,
-		BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 5,
+		BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 5,
 	}, Main)
 
 	if UserCfg then
@@ -2265,6 +2417,7 @@ function Library:CreateWindow(O)
 			Position = UDim2.new(0, 12, 1, -58), Size = UDim2.fromOffset(SBW, 46), BackgroundColor3 = Theme.Card, BorderSizePixel = 0,
 			AutoButtonColor = false, Text = "", ZIndex = 5,
 		}, Main)
+		Bg(UC, 0)
 		Corner(UC, 12)
 		Stroke(UC, Theme.Stroke, 1)
 		local Av = New("ImageLabel", {
@@ -2274,12 +2427,12 @@ function Library:CreateWindow(O)
 		Corner(Av, 16)
 		New("TextLabel", {
 			Position = UDim2.fromOffset(48, 6), Size = UDim2.new(1, -56, 0, 18), BackgroundTransparency = 1,
-			Text = UserCfg.Anonymous and "Anonymous" or LocalPlayer.DisplayName, TextColor3 = Theme.Text, TextSize = 12, Font = FontBold,
+			Text = UserCfg.Anonymous and "Anonymous" or LocalPlayer.DisplayName, TextColor3 = Theme.Text, TextSize = 13, Font = FontBold,
 			TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
 		}, UC)
 		New("TextLabel", {
 			Position = UDim2.fromOffset(48, 24), Size = UDim2.new(1, -56, 0, 14), BackgroundTransparency = 1,
-			Text = UserCfg.Anonymous and "@anonymous" or ("@" .. LocalPlayer.Name), TextColor3 = Theme.Muted, TextSize = 10, Font = FontMed,
+			Text = UserCfg.Anonymous and "@anonymous" or ("@" .. LocalPlayer.Name), TextColor3 = Theme.Muted, TextSize = 11, Font = FontMed,
 			TextXAlignment = Left, TextTruncate = Enum.TextTruncate.AtEnd,
 		}, UC)
 		UC.MouseButton1Click:Connect(function() Call(UserCfg.Callback) end)
