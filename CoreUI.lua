@@ -427,10 +427,12 @@ local OrbPurple = Color3.fromRGB(139, 92, 255)
 local OrbRegistry = {}
 Library.OrbImages = {}
 Library.OrbImageTransparency = nil
+Library.OrbsHidden = false
 
 local function StyleOrb(E)
 	local Obj = E.Obj
 	if not Obj or not Obj.Parent then return end
+	Obj.Visible = not Library.OrbsHidden
 	local Kind, Val
 	local Src = Library.OrbImages[E.Key]
 	if Src then Kind, Val = ParseIcon(Src) end
@@ -465,6 +467,13 @@ function Library:SetOrbImage(Img, Transparency)
 		Library.OrbImages = { Purple = Img, Cyan = Img }
 	end
 	if type(Transparency) == "number" then Library.OrbImageTransparency = math.clamp(Transparency, 0, 1) end
+	PruneOrbs()
+	for _, E in ipairs(OrbRegistry) do StyleOrb(E) end
+end
+
+-- Hides every orb (window, notifications, popups, splash). Hidden orbs also stop moving.
+function Library:SetOrbsHidden(V)
+	Library.OrbsHidden = V and true or false
 	PruneOrbs()
 	for _, E in ipairs(OrbRegistry) do StyleOrb(E) end
 end
@@ -602,12 +611,35 @@ local function BuildDialog(Host, O)
 		Bg(Box, 0)
 		Corner(Box, 12)
 		Stroke(Box, Theme.StrokeHi, 1.5, 0)
-		Pad(Box, 18, 16, 18, 16)
-		List(Box, 12)
 		Sc = New("UIScale", { Scale = 0.92 }, Box)
 		Tween(Sc, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
 
-		local TitleRow = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1 }, Box)
+		-- moving orbs behind the dialog content
+		local Glow = New("CanvasGroup", { Name = "Glow", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, Box)
+		Corner(Glow, 12)
+		local OrbA = Orb("Purple", 0.1, 0.15, 200, 0.7, Glow)
+		local OrbB = Orb("Cyan", 0.95, 0.9, 200, 0.7, Glow)
+
+		local Content = New("Frame", {
+			Name = "Content", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 3,
+		}, Box)
+		Pad(Content, 18, 16, 18, 16)
+		List(Content, 12)
+
+		local MyBox = Box
+		task.spawn(function()
+			local T0, Seed = os.clock(), math.random() * 6.28
+			while Box == MyBox and MyBox.Parent do
+				if Library.Moving and not Library.OrbsHidden then
+					local T = os.clock() - T0 + Seed
+					OrbA.Position = UDim2.fromScale(0.1 + math.sin(T * 0.9) * 0.1, 0.15 + math.cos(T * 0.7) * 0.2)
+					OrbB.Position = UDim2.fromScale(0.95 + math.cos(T * 0.8) * 0.1, 0.9 + math.sin(T * 0.6) * 0.2)
+				end
+				RunService.RenderStepped:Wait()
+			end
+		end)
+
+		local TitleRow = New("Frame", { LayoutOrder = 1, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1 }, Content)
 		local TX = 0
 		if O.Icon then
 			IconLabel(TitleRow, O.Icon, 22, Theme.Accent, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0) }, "•")
@@ -623,12 +655,12 @@ local function BuildDialog(Host, O)
 				LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = AutoY, BackgroundTransparency = 1, RichText = true,
 				Text = Body, TextColor3 = Theme.Muted, TextSize = 14, Font = FontMed, TextWrapped = true,
 				TextXAlignment = Left, TextYAlignment = Enum.TextYAlignment.Top,
-			}, Box)
+			}, Content)
 		end
 
 		local Buttons = O.Buttons or {}
 		if #Buttons > 0 then
-			local Row = New("Frame", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1 }, Box)
+			local Row = New("Frame", { LayoutOrder = 3, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1 }, Content)
 			List(Row, 8, { FillDirection = Enum.FillDirection.Horizontal })
 			local N = #Buttons
 			for I, B in ipairs(Buttons) do
@@ -765,7 +797,7 @@ local function EnsureNotif()
 			local G = NotifGlows[I]
 			if not G.A.Parent then
 				table.remove(NotifGlows, I)
-			elseif Library.Moving then
+			elseif Library.Moving and not Library.OrbsHidden then
 				local T = Now - G.T0 + G.Seed
 				G.A.Position = UDim2.fromScale(0.1 + math.sin(T * 0.9) * 0.1, 0.15 + math.cos(T * 0.7) * 0.2)
 				G.B.Position = UDim2.fromScale(0.95 + math.cos(T * 0.8) * 0.1, 0.9 + math.sin(T * 0.6) * 0.2)
@@ -2378,6 +2410,10 @@ function Window:SetOrbImage(Img, Transparency)
 	Library:SetOrbImage(Img, Transparency)
 end
 
+function Window:SetOrbsHidden(V)
+	Library:SetOrbsHidden(V)
+end
+
 function Window:SetParticles(V)
 	self._particles = V ~= false
 	if self._applyParticles then self._applyParticles() end
@@ -2651,6 +2687,7 @@ function Library:CreateWindow(O)
 	Library.Transparent = O.Transparent and true or false
 	Library.Moving = O.MovingAnimation ~= false
 	if O.OrbImage ~= nil then Library:SetOrbImage(O.OrbImage, O.OrbImageTransparency) end
+	if O.HideOrbs ~= nil then Library:SetOrbsHidden(O.HideOrbs) end
 
 	if O.NotificationWidth ~= nil or O.NotificationHeight ~= nil then
 		Library:SetNotificationSize(O.NotificationWidth, O.NotificationHeight)
@@ -2920,7 +2957,21 @@ function Library:CreateWindow(O)
 	local BubbleMoved = false
 	MakeDraggable(Win, BubbleButton, Bubble, function() return 1 end, function() return Win._bubbleDraggable end, function() BubbleMoved = true end)
 
-	CloseButton.MouseButton1Click:Connect(function() Win:Destroy() end)
+	CloseButton.MouseButton1Click:Connect(function()
+		if O.ConfirmClose == false then
+			Win:Destroy()
+			return
+		end
+		Win:Dialog({
+			Title = "CLOSE UI",
+			Icon = "lucide:power",
+			Content = "Are you sure you want to close this?",
+			Buttons = {
+				{ Title = "NO", Variant = "Secondary" },
+				{ Title = "YES", Variant = "Danger", Callback = function() Win:Destroy() end },
+			},
+		})
+	end)
 	MinButton.MouseButton1Click:Connect(function() Win:Close() end)
 	BubbleButton.MouseButton1Click:Connect(function()
 		if BubbleMoved then
@@ -2945,8 +2996,10 @@ function Library:CreateWindow(O)
 		local Step = Acc
 		Acc = 0
 
-		MainOrbA.Position = UDim2.fromScale(0.85 + math.cos(Elapsed * 0.7) * 0.12, 0.15 + math.sin(Elapsed * 0.55) * 0.15)
-		MainOrbB.Position = UDim2.fromScale(0.15 + math.sin(Elapsed * 0.6) * 0.12, 0.85 + math.cos(Elapsed * 0.5) * 0.15)
+		if not Library.OrbsHidden then
+			MainOrbA.Position = UDim2.fromScale(0.85 + math.cos(Elapsed * 0.7) * 0.12, 0.15 + math.sin(Elapsed * 0.55) * 0.15)
+			MainOrbB.Position = UDim2.fromScale(0.15 + math.sin(Elapsed * 0.6) * 0.12, 0.85 + math.cos(Elapsed * 0.5) * 0.15)
+		end
 
 		if not Win._particles then return end
 		for _, P in ipairs(Particles) do
@@ -2988,7 +3041,7 @@ function Library:CreateWindow(O)
 		task.spawn(function()
 			local T0 = os.clock()
 			while SOrbA.Parent and not Win.Destroyed do
-				if Library.Moving then
+				if Library.Moving and not Library.OrbsHidden then
 					local T = os.clock() - T0
 					SOrbA.Position = UDim2.fromScale(0.92 + math.cos(T * 1.4) * 0.1, 0.08 + math.sin(T * 1.1) * 0.12)
 					SOrbB.Position = UDim2.fromScale(0.08 + math.sin(T * 1.2) * 0.1, 0.92 + math.cos(T * 1.0) * 0.12)
