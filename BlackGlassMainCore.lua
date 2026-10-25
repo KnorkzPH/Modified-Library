@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 local RunService = game:GetService("RunService")
 local GuiService = game:GetService("GuiService")
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
 local White = Color3.new(1, 1, 1)
@@ -247,6 +248,159 @@ local function Stroke(Parent, Color, Thickness, Transparency, Style)
 	return S
 end
 
+-- ============================================================================
+-- GLASSMORPHISM (optional, PC only): black + white glossy "liquid glass"
+--   * Library:SetGlassmorphism(true/false) / Window:SetGlassmorphism(true/false)
+--   * PC only. On touch devices the same call only switches on Transparent mode (nothing else changes),
+--     because the animated gloss + backdrop blur are too heavy for mobile.
+--   * Layers per surface (all white, always inside the surface's own corners):
+--       tint (frosted top light) + two soft light streaks that drift slowly + inner rim + top specular line
+--   * A BlurEffect (Lighting) blurs the game world behind the window while the window is open.
+-- ============================================================================
+Library.Glassmorphism = false          -- what the user asked for
+Library.GlassEffective = false         -- what is really drawn (asked for AND running on PC)
+Library.GlassBlurSize = 6              -- 0 = no backdrop blur (low by default: mostly clear glass with a light blur)
+Library.GlassDistortion = 0.6          -- 0-1: strength of the lens / refraction edge on the glass
+do
+	local U = UserInputService
+	Library.IsPC = (not U.TouchEnabled) or (U.KeyboardEnabled and U.MouseEnabled)
+end
+
+FX.Liquids = setmetatable({}, { __mode = "k" })
+
+local LiquidTintAlpha = NSeq({ { 0, 0.9 }, { 0.3, 0.95 }, { 0.7, 0.975 }, { 1, 0.99 } })
+local StreakAlphaA = NSeq({ { 0, 1 }, { 0.36, 1 }, { 0.5, 0.88 }, { 0.64, 1 }, { 1, 1 } })
+local StreakAlphaB = NSeq({ { 0, 1 }, { 0.42, 1 }, { 0.52, 0.94 }, { 0.62, 1 }, { 1, 1 } })
+-- Lens edge: light bends near the rim of real glass, so the edge gets a bright, soft band that fades inward
+-- (stronger on the top-left, softer on the bottom-right). Peak scales each band; D is Library.GlassDistortion.
+local function LensSeq(D, Peak)
+	local Pts = { { 0, 0.55 }, { 0.3, 0.2 }, { 0.55, 0.04 }, { 0.8, 0.2 }, { 1, 0.45 } }
+	local K = {}
+	for I, P in ipairs(Pts) do
+		K[I] = NumberSequenceKeypoint.new(P[1], math.clamp(1 - P[2] * Peak * D, 0, 1))
+	end
+	return NumberSequence.new(K)
+end
+local SpecAlpha = NSeq({ { 0, 1 }, { 0.18, 0.55 }, { 0.5, 0.15 }, { 0.82, 0.55 }, { 1, 1 } })
+
+-- Kind: "Full" (tint + streaks + rim + specular line) or "Light" (tint + rim + specular line, nothing animated)
+function FX.Liquid(Parent, R, Kind)
+	if Parent:FindFirstChild("LiquidGlass") then return Parent:FindFirstChild("LiquidGlass") end
+	local Full = Kind ~= "Light"
+	local Holder = New("Frame", {
+		Name = "LiquidGlass", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
+		ZIndex = 2, Active = false, Visible = Library.GlassEffective,
+	}, Parent)
+	local Rec = { Kind = Kind or "Full" }
+
+	local Tint = New("Frame", {
+		Name = "Tint", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 0,
+		BorderSizePixel = 0, ZIndex = 2, Active = false,
+	}, Holder)
+	Corner(Tint, R)
+	New("UIGradient", { Rotation = 90, Transparency = LiquidTintAlpha }, Tint)
+
+	if Full then
+		local A = New("Frame", {
+			Name = "StreakA", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 0,
+			BorderSizePixel = 0, ZIndex = 2, Active = false,
+		}, Holder)
+		Corner(A, R)
+		Rec.GA = New("UIGradient", { Rotation = 24, Transparency = StreakAlphaA, Offset = Vector2.new(-0.5, 0) }, A)
+		local B = New("Frame", {
+			Name = "StreakB", Size = UDim2.fromScale(1, 1), BackgroundColor3 = White, BackgroundTransparency = 0,
+			BorderSizePixel = 0, ZIndex = 2, Active = false,
+		}, Holder)
+		Corner(B, R)
+		Rec.GB = New("UIGradient", { Rotation = -38, Transparency = StreakAlphaB, Offset = Vector2.new(0.5, 0) }, B)
+	end
+
+	-- inner rim: a second, thinner white edge just inside the main border (gives the "thick glass" look)
+	local Rim = New("Frame", {
+		Name = "InnerRim", Position = UDim2.fromOffset(2, 2), Size = UDim2.new(1, -4, 1, -4), BackgroundTransparency = 1,
+		BorderSizePixel = 0, ZIndex = 3, Active = false,
+	}, Holder)
+	Corner(Rim, math.max(R - 2, 1))
+	Stroke(Rim, White, 1, 0.1, "Soft")
+
+	-- lens / refraction edge (three soft bands of different widths, strength = Library.GlassDistortion)
+	if Full then
+		Rec.Lens = {}
+		for _, B in ipairs({ { 10, 0.4 }, { 5, 0.7 }, { 2, 1.2 } }) do
+			local T, Peak = B[1], B[2]
+			local Band = New("Frame", {
+				Name = "LensEdge", Position = UDim2.fromOffset(T, T), Size = UDim2.new(1, -T * 2, 1, -T * 2), BackgroundTransparency = 1,
+				BorderSizePixel = 0, ZIndex = 3, Active = false,
+			}, Holder)
+			Corner(Band, math.max(R - T, 1))
+			local St = New("UIStroke", { Color = White, Thickness = T, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Transparency = 0 }, Band)
+			local G = New("UIGradient", { Rotation = 135, Transparency = LensSeq(Library.GlassDistortion, Peak) }, St)
+			table.insert(Rec.Lens, { Grad = G, Peak = Peak })
+		end
+	end
+
+	-- specular line along the top edge
+	local Spec = New("Frame", {
+		Name = "Specular", Position = UDim2.new(0, R, 0, 1), Size = UDim2.new(1, -R * 2, 0, 1), BackgroundColor3 = White,
+		BorderSizePixel = 0, ZIndex = 3, Active = false,
+	}, Holder)
+	New("UIGradient", { Transparency = SpecAlpha }, Spec)
+
+	FX.Liquids[Holder] = Rec
+	return Holder
+end
+
+function FX.SetDistortion(D)
+	for Holder, Rec in pairs(FX.Liquids) do
+		if Holder.Parent and Rec.Lens then
+			for _, L in ipairs(Rec.Lens) do L.Grad.Transparency = LensSeq(D, L.Peak) end
+		end
+	end
+end
+
+-- BlurFrame: a real Frame inside the main frame, exactly the same size and corners as it. The acrylic blur is built from
+-- THIS frame's position and size, and it carries the soft dark acrylic tint while glassmorphism is on.
+FX.BlurFrames = setmetatable({}, { __mode = "k" })
+function FX.BlurFrame(Parent, R)
+	local F = New("Frame", {
+		Name = "BlurFrame", Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1, Active = false,
+	}, Parent)
+	Corner(F, R)
+	FX.BlurFrames[F] = true
+	if Library.GlassEffective then F.BackgroundTransparency = 0.82 end
+	return F
+end
+
+function FX.SetBlurFrames(V)
+	for F in pairs(FX.BlurFrames) do
+		if F.Parent then Tween(F, 0.3, { BackgroundTransparency = V and 0.82 or 1 }) else FX.BlurFrames[F] = nil end
+	end
+end
+
+function FX.SetLiquid(V)
+	for Holder in pairs(FX.Liquids) do
+		if Holder.Parent then Holder.Visible = V else FX.Liquids[Holder] = nil end
+	end
+end
+
+-- one shared loop moves every streak (about 30 updates a second, only while glass is really on)
+task.spawn(function()
+	local T0 = os.clock()
+	while true do
+		task.wait(1 / 30)
+		if Library.GlassEffective and Library.Moving then
+			local T = os.clock() - T0
+			for Holder, Rec in pairs(FX.Liquids) do
+				if Rec.GA and Holder.Parent and Holder.Visible then
+					Rec.GA.Offset = Vector2.new(math.sin(T * 0.32) * 0.75, 0)
+					Rec.GB.Offset = Vector2.new(math.cos(T * 0.23) * 0.75, 0)
+				end
+			end
+		end
+	end
+end)
+
 local function Gradient(Parent, A, B, Rotation)
 	return New("UIGradient", { Color = ColorSequence.new(A, B), Rotation = Rotation or 0 }, Parent)
 end
@@ -337,7 +491,12 @@ end
 
 -- Glass(solidValue, transparentValue): picks the base transparency depending on Library.Transparent
 local function Glass(Normal, Clear)
-	return function() return Library.Transparent and Clear or Normal end
+	return function()
+		if not Library.Transparent then return Normal end
+		-- glassmorphism: more see-through so the backdrop blur shows through
+		if Library.GlassEffective then return Clear + (1 - Clear) * 0.5 end
+		return Clear
+	end
 end
 
 local function PruneBg()
@@ -455,9 +614,239 @@ end
 
 -- Toggle glass mode at runtime (re-applies every registered background)
 function Library:SetTransparent(V)
-	Library.Transparent = V and true or false
+	V = V and true or false
+	if Library.Glassmorphism then
+		-- glassmorphism always needs the transparent look; remember the wish for when it is switched off
+		Library._PreGlassTransparent = V
+		Library.Transparent = true
+	else
+		Library.Transparent = V
+	end
 	Library:SetBackgroundTransparency(Library.BackgroundTransparency)
 end
+
+-- ---- Glassmorphism: acrylic backdrop blur (PC only, MAIN WINDOW only) ----
+-- "Window" mode (default): a thin glass part is placed right in front of the camera exactly behind the main window and a
+--   DepthOfField effect blurs only that area (the "acrylic" trick), so dialogs, notifications and the rest of the screen stay sharp.
+-- "Screen" mode: fallback that blurs the whole game view with a BlurEffect (use it if "Window" does not show on your executor).
+-- Everything is created when Glassmorphism is switched on and fully removed (other DepthOfField effects restored) when it is off.
+Library.OpenWindows = {}
+Library.GlassBlurMode = "Window"
+local ScreenBlur
+local AcrylicParts = {}
+local AcrylicFolder, AcrylicDof
+local SavedDof = {}
+local AcrylicBind = "ToolkitUIAcrylic"
+local ACRYLIC_DISTANCE = 0.001
+Library.GlassBlurAdjust = { X = 0, Y = 0, W = 0, H = 0 }   -- manual fine-tune in pixels if your executor is off by a few px
+
+local function DofStrength() return math.clamp(Library.GlassBlurSize / 20, 0, 1) end
+
+local function SetScreenBlur(On)
+	if On then
+		if not (ScreenBlur and ScreenBlur.Parent) then
+			local Ok, B = pcall(function()
+				local Old = Lighting:FindFirstChild("ToolkitUIGlassBlur")
+				if Old then Old:Destroy() end
+				return New("BlurEffect", { Name = "ToolkitUIGlassBlur", Size = 0 }, Lighting)
+			end)
+			ScreenBlur = Ok and B or nil
+		end
+		if ScreenBlur then Tween(ScreenBlur, 0.35, { Size = Library.GlassBlurSize }) end
+	elseif ScreenBlur then
+		local B = ScreenBlur
+		ScreenBlur = nil
+		local Ok, T = pcall(Tween, B, 0.25, { Size = 0 })
+		if Ok and T then
+			T.Completed:Connect(function() pcall(function() B:Destroy() end) end)
+		else
+			pcall(function() B:Destroy() end)
+		end
+	end
+end
+
+local ACRYLIC_STRIPS = 6        -- strips per rounded corner: they follow the window's curve so nothing sticks out
+
+local function PlaceAcrylicRect(Part, Cam, X, Y, W, H)
+	if W < 0.5 or H < 0.5 then
+		Part.Parent = nil
+		return
+	end
+	-- every corner is projected onto ONE flat plane in front of the camera (perpendicular to where it looks),
+	-- so the part lines up with the frame at any position on screen (the old sphere-distance version drifted off-centre)
+	local CF = Cam.CFrame
+	local Look = CF.LookVector
+	local function ToWorld(P)
+		local R = Cam:ViewportPointToRay(P.X, P.Y)
+		local Dir = R.Direction
+		local T = (ACRYLIC_DISTANCE - (R.Origin - CF.Position):Dot(Look)) / Dir:Dot(Look)
+		return R.Origin + Dir * T
+	end
+	local TL = ToWorld(Vector2.new(X, Y))
+	local TR = ToWorld(Vector2.new(X + W, Y))
+	local BR = ToWorld(Vector2.new(X + W, Y + H))
+	Part.Size = Vector3.new((TR - TL).Magnitude, (TR - BR).Magnitude, 0)
+	Part.CFrame = CFrame.fromMatrix((TL + BR) / 2, Cam.CFrame.XVector, Cam.CFrame.YVector, Cam.CFrame.ZVector)
+	Part.Parent = AcrylicFolder
+end
+
+-- The blur area is built from thin horizontal strips that follow the rounded corners of the main frame,
+-- so it fits the window exactly and nothing is blurred outside it.
+local function AcrylicRender()
+	local Cam = workspace.CurrentCamera
+	if not Cam then return end
+	for Win, Set in pairs(AcrylicParts) do
+		local M = Win.BlurFrame or Win.Main
+		if not (M and M.Parent) then
+			for _, P in ipairs(Set) do P.Parent = nil end
+		else
+			local Adj = Library.GlassBlurAdjust
+			local Pos = M.AbsolutePosition + Vector2.new(Adj.X, Adj.Y)
+			local Size = M.AbsoluteSize + Vector2.new(Adj.W, Adj.H)
+			local Scale = Win.RootScale and Win.RootScale.Scale or 1
+			local R = math.min(MAIN_RADIUS * Scale, Size.X / 2, Size.Y / 2)
+			local K = ACRYLIC_STRIPS
+			local H = R / K
+			for I = 1, K do
+				local YTop = (I - 1) * H
+				local Dy = R - YTop
+				local Inset = R - math.sqrt(math.max(R * R - Dy * Dy, 0))
+				local W = Size.X - Inset * 2
+				PlaceAcrylicRect(Set[I], Cam, Pos.X + Inset, Pos.Y + YTop, W, H + 0.5)                       -- top strips
+				PlaceAcrylicRect(Set[K + I], Cam, Pos.X + Inset, Pos.Y + Size.Y - YTop - H - 0.5, W, H + 0.5) -- bottom strips
+			end
+			PlaceAcrylicRect(Set[2 * K + 1], Cam, Pos.X, Pos.Y + R, Size.X, Size.Y - R * 2)                      -- middle
+		end
+	end
+end
+
+local function EnsureAcrylicRig()
+	if AcrylicDof and AcrylicDof.Parent then return true end
+	local Cam = workspace.CurrentCamera
+	if not Cam then return false end
+	local Ok = pcall(function()
+		-- other DepthOfField effects would fight with ours, so pause them while the acrylic is on
+		for _, E in ipairs(Lighting:GetChildren()) do
+			if E:IsA("DepthOfFieldEffect") and E.Name ~= "ToolkitUIAcrylicDof" and SavedDof[E] == nil then
+				SavedDof[E] = E.Enabled
+				E.Enabled = false
+			end
+		end
+		AcrylicFolder = Cam:FindFirstChild("ToolkitUIAcrylic") or New("Folder", { Name = "ToolkitUIAcrylic" }, Cam)
+		AcrylicDof = New("DepthOfFieldEffect", {
+			Name = "ToolkitUIAcrylicDof", FarIntensity = 0, FocusDistance = 0.05, InFocusRadius = 0.1, NearIntensity = DofStrength(),
+		}, Lighting)
+	end)
+	if Ok then
+		pcall(function() RunService:BindToRenderStep(AcrylicBind, 2000, AcrylicRender) end)
+	end
+	return Ok and AcrylicDof ~= nil
+end
+
+local function ClearAcrylicRig()
+	pcall(function() RunService:UnbindFromRenderStep(AcrylicBind) end)
+	for Win, Set in pairs(AcrylicParts) do
+		for _, P in ipairs(Set) do pcall(function() P:Destroy() end) end
+		AcrylicParts[Win] = nil
+	end
+	if AcrylicDof then pcall(function() AcrylicDof:Destroy() end) AcrylicDof = nil end
+	if AcrylicFolder then pcall(function() AcrylicFolder:Destroy() end) AcrylicFolder = nil end
+	for E, Was in pairs(SavedDof) do
+		pcall(function() E.Enabled = Was end)
+		SavedDof[E] = nil
+	end
+end
+
+local function NewAcrylicPart()
+	local Part = New("Part", {
+		Name = "Body", Color = Color3.new(0, 0, 0), Material = Enum.Material.Glass, Size = Vector3.new(1, 1, 0),
+		Anchored = true, CanCollide = false, Locked = true, CastShadow = false, Transparency = 0.98,
+	})
+	New("SpecialMesh", { MeshType = Enum.MeshType.Brick, Offset = Vector3.new(0, 0, -0.000001) }, Part)
+	return Part
+end
+
+local function AddAcrylic(Win)
+	if AcrylicParts[Win] or not (Win.BlurFrame or Win.Main) then return end
+	if not EnsureAcrylicRig() then return end
+	local Set = {}
+	for I = 1, ACRYLIC_STRIPS * 2 + 1 do Set[I] = NewAcrylicPart() end
+	AcrylicParts[Win] = Set
+end
+
+local function RemoveAcrylic(Win)
+	local Set = AcrylicParts[Win]
+	if Set then
+		for _, P in ipairs(Set) do pcall(function() P:Destroy() end) end
+		AcrylicParts[Win] = nil
+	end
+end
+
+local function UpdateGlassBlur()
+	local On = Library.GlassEffective and Library.GlassBlurSize > 0
+	if Library.GlassBlurMode == "Screen" then
+		ClearAcrylicRig()
+		SetScreenBlur(On and next(Library.OpenWindows) ~= nil)
+		return
+	end
+	SetScreenBlur(false)
+	for Win in pairs(Library.OpenWindows) do
+		if On then AddAcrylic(Win) else RemoveAcrylic(Win) end
+	end
+	for Win in pairs(AcrylicParts) do
+		if not (On and Library.OpenWindows[Win]) then RemoveAcrylic(Win) end
+	end
+	if AcrylicDof then AcrylicDof.NearIntensity = DofStrength() end
+	if next(AcrylicParts) == nil then ClearAcrylicRig() end
+end
+
+-- Returns true when the full glass look is really on (PC). On mobile it only switches on Transparent mode and returns false.
+function Library:SetGlassmorphism(V)
+	V = V and true or false
+	if V ~= Library.Glassmorphism then
+		Library.Glassmorphism = V
+		if V then
+			Library._PreGlassTransparent = Library.Transparent
+			Library.Transparent = true
+		else
+			if Library._PreGlassTransparent ~= nil then Library.Transparent = Library._PreGlassTransparent end
+			Library._PreGlassTransparent = nil
+		end
+	end
+	Library.GlassEffective = Library.Glassmorphism and Library.IsPC
+	FX.SetLiquid(Library.GlassEffective)
+	FX.SetBlurFrames(Library.GlassEffective)
+	Library:SetBackgroundTransparency(Library.BackgroundTransparency)
+	UpdateGlassBlur()
+	return Library.GlassEffective
+end
+
+function Library:IsGlassmorphismSupported() return Library.IsPC end
+
+-- Acrylic blur strength for glassmorphism (0 = off, max 40)
+function Library:SetGlassBlur(Size)
+	Library.GlassBlurSize = math.clamp(tonumber(Size) or 6, 0, 40)
+	UpdateGlassBlur()
+end
+
+-- Fine-tune the blur frame in pixels: X / Y move it, W / H grow or shrink it (all optional, default 0)
+function Library:SetGlassBlurAdjust(X, Y, W, H)
+	Library.GlassBlurAdjust = { X = tonumber(X) or 0, Y = tonumber(Y) or 0, W = tonumber(W) or 0, H = tonumber(H) or 0 }
+end
+
+-- Lens / refraction edge strength on the glass (0 = none, 1 = strong)
+function Library:SetGlassDistortion(V)
+	Library.GlassDistortion = math.clamp(tonumber(V) or 0.6, 0, 1)
+	FX.SetDistortion(Library.GlassDistortion)
+end
+
+-- "Window" (default, blurs only the main window area) or "Screen" (blurs the whole game view)
+function Library:SetGlassBlurMode(Mode)
+	Library.GlassBlurMode = (tostring(Mode):lower() == "screen") and "Screen" or "Window"
+	UpdateGlassBlur()
+end
+
+Library._UpdateGlassBlur = UpdateGlassBlur
 
 -- Opacity: 0 = invisible backgrounds, 1 = fully visible
 function Library:SetOpacity(V)
@@ -895,7 +1284,9 @@ end
 -- Only ONE slider / colorpicker drag can be active at a time across the whole UI.
 local ActiveDrag = nil
 
-local function MakeDrag(Win, Hit, OnMove, Page)
+-- OnBegin (optional): when given, it runs at the start of a drag INSTEAD of OnMove, so the value does not jump
+-- to the pointer (used by the slider, where only the knob can be dragged).
+local function MakeDrag(Win, Hit, OnMove, Page, OnBegin)
 	local Tracked = nil
 	local Token = { Win = Win }
 	local function Pos(I) return Vector2.new(I.Position.X, I.Position.Y + InsetY()) end
@@ -910,7 +1301,7 @@ local function MakeDrag(Win, Hit, OnMove, Page)
 		ActiveDrag = Token
 		Tracked = I
 		if Page then Page.ScrollingEnabled = false end
-		OnMove(Pos(I))
+		if OnBegin then OnBegin(Pos(I)) else OnMove(Pos(I)) end
 	end)
 	Win:Connect(UserInputService.InputChanged, function(I)
 		if ActiveDrag ~= Token or not IsTrackedMove(Tracked, I) then return end
@@ -946,6 +1337,7 @@ local function BuildDialog(Host, O)
 		Corner(Box, DIALOG_RADIUS)
 		Stroke(Box, Theme.Frost, 1.5, 0, "Rim")
 		FX.Surface(Box, DIALOG_RADIUS, { Height = 72, Shade = true })
+		FX.Liquid(Box, DIALOG_RADIUS, "Full")
 		FX.RealGlass(Box, DIALOG_RADIUS, "Dialog")
 		Sc = New("UIScale", { Scale = 0.92 }, Box)
 		Tween(Sc, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
@@ -1198,6 +1590,7 @@ function Library:Notify(O)
 	Corner(Card, NOTIF_RADIUS)
 	BgStroke(Stroke(Card, Theme.Frost, 1, 0, "Rim"), Glass(0, 0.12))
 	FX.Surface(Card, NOTIF_RADIUS, { Height = 44 })
+	FX.Liquid(Card, NOTIF_RADIUS, "Light")
 
 	local Glow = New("CanvasGroup", { Name = "Glow", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, Card)
 	Corner(Glow, NOTIF_RADIUS)
@@ -1591,7 +1984,7 @@ function Elements:Slider(O)
 		ClearTextOnFocus = false, TextEditable = O.IsTextbox == true, TextTruncate = Enum.TextTruncate.AtEnd,
 	}, C.Head)
 	local Holder = New("Frame", {
-		LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Active = true,
+		LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1,
 	}, C.Card)
 	local Track = New("Frame", {
 		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 9, 0.5, 0), Size = UDim2.new(1, -18, 0, 6),
@@ -1607,6 +2000,11 @@ function Elements:Slider(O)
 	}, Track)
 	Corner(Knob, 7)
 	Stroke(Knob, Theme.Accent, 2)
+	-- Only the knob (the drag handle) can be dragged. This invisible, slightly larger area makes it easy to grab on touch.
+	local KnobHit = New("Frame", {
+		Name = "DragHandle", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 30),
+		BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 3, Active = true,
+	}, Knob)
 
 	local Decimals = #(tostring(Step):match("%.(%d+)") or "")
 	function Obj:Set(Val, Silent)
@@ -1635,10 +2033,14 @@ function Elements:Slider(O)
 		Obj:Set(N or Obj.Value)
 	end)
 
-	MakeDrag(self.Win, Holder, function(P)
-		local R = math.clamp((P.X - Track.AbsolutePosition.X) / math.max(Track.AbsoluteSize.X, 1), 0, 1)
+	local GrabOffset = 0
+	MakeDrag(self.Win, KnobHit, function(P)
+		local R = math.clamp((P.X - GrabOffset - Track.AbsolutePosition.X) / math.max(Track.AbsoluteSize.X, 1), 0, 1)
 		Obj:Set(Min + (Max - Min) * R)
-	end, self.Page)
+	end, self.Page, function(P)
+		-- remember where on the knob it was grabbed so the knob follows the pointer without jumping
+		GrabOffset = P.X - (Knob.AbsolutePosition.X + Knob.AbsoluteSize.X / 2)
+	end)
 
 	Obj:Set(Default or Min, Default == nil)
 	return self:_Finish(O, Obj, C)
@@ -2613,6 +3015,8 @@ function Window:Open()
 	self.Hidden = false
 	self.Root.Visible = true
 	self.Bubble.Visible = false
+	Library.OpenWindows[self] = true
+	Library._UpdateGlassBlur()
 	Call(self._onOpen)
 end
 
@@ -2621,6 +3025,8 @@ function Window:Close()
 	self.Hidden = true
 	self.Root.Visible = false
 	self.Bubble.Visible = self._openButton
+	Library.OpenWindows[self] = nil
+	Library._UpdateGlassBlur()
 	Call(self._onClose)
 end
 
@@ -2677,6 +3083,14 @@ end
 function Window:SetOpacity(V)
 	Library:SetOpacity(V)
 end
+
+-- Glassmorphism (PC only). Returns true if the full glass look is on; false on mobile (only Transparent mode is applied).
+function Window:SetGlassmorphism(V) return Library:SetGlassmorphism(V) end
+function Window:IsGlassmorphismSupported() return Library:IsGlassmorphismSupported() end
+function Window:SetGlassBlur(V) Library:SetGlassBlur(V) end
+function Window:SetGlassBlurMode(V) Library:SetGlassBlurMode(V) end
+function Window:SetGlassDistortion(V) Library:SetGlassDistortion(V) end
+function Window:SetGlassBlurAdjust(X, Y, W, H) Library:SetGlassBlurAdjust(X, Y, W, H) end
 
 function Window:Tag(O)
 	if type(O) == "string" then O = { Title = O } end
@@ -2820,6 +3234,8 @@ function Window:Destroy()
 	if self.Destroyed then return end
 	self.Destroyed = true
 	if ActiveDrag and ActiveDrag.Win == self then ActiveDrag = nil end
+	Library.OpenWindows[self] = nil
+	Library._UpdateGlassBlur()
 	Call(self._onDestroy)
 	for _, C in ipairs(self.Connections) do pcall(function() C:Disconnect() end) end
 	local Ok, T = pcall(Tween, self.RootScale, 0.25, { Scale = 0.8 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
@@ -3098,6 +3514,11 @@ function Library:CreateWindow(O)
 	if O.HideOrbs ~= nil then Library:SetOrbsHidden(O.HideOrbs) end
 	if O.Reflections ~= nil then Library:SetReflections(O.Reflections) end
 	if O.GlassModule ~= nil then Library:SetGlassProvider(O.GlassModule, O.GlassOptions) end
+	if O.GlassBlurMode ~= nil then Library.GlassBlurMode = (tostring(O.GlassBlurMode):lower() == "screen") and "Screen" or "Window" end
+	if O.GlassBlur ~= nil then Library.GlassBlurSize = math.clamp(tonumber(O.GlassBlur) or 6, 0, 40) end
+	if O.GlassDistortion ~= nil then Library.GlassDistortion = math.clamp(tonumber(O.GlassDistortion) or 0.6, 0, 1) end
+	-- Glassmorphism = true turns the PC-only liquid glass on at start (optional, default off)
+	if O.Glassmorphism ~= nil then Library:SetGlassmorphism(O.Glassmorphism) end
 
 	if O.NotificationWidth ~= nil or O.NotificationHeight ~= nil then
 		Library:SetNotificationSize(O.NotificationWidth, O.NotificationHeight)
@@ -3125,6 +3546,8 @@ function Library:CreateWindow(O)
 		Folder = FolderName, ToggleKey = O.ToggleKey or Enum.KeyCode.RightShift, _openButton = true, _bubbleDraggable = true,
 		_moving = O.MovingAnimation ~= false, _particles = O.Particles ~= false,
 	}, Window)
+	Library.OpenWindows[Win] = true
+	Library._UpdateGlassBlur()
 
 	pcall(function()
 		local Containers = { CoreGui }
@@ -3168,8 +3591,11 @@ function Library:CreateWindow(O)
 	Corner(Main, MAIN_RADIUS)
 	Stroke(Main, Theme.Frost, 1.5, 0, "Rim")
 	FX.Surface(Main, MAIN_RADIUS, { Height = 120, Shade = true, ShadeHeight = 90 })
+	FX.Liquid(Main, MAIN_RADIUS, "Full")
 	FX.RealGlass(Main, MAIN_RADIUS, "Main")
 	Win.Main = Main
+	Win.BlurFrame = FX.BlurFrame(Main, MAIN_RADIUS)
+	Library._UpdateGlassBlur()
 
 	local Background = New("CanvasGroup", { Name = "Background", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, Main)
 	Corner(Background, MAIN_RADIUS)
